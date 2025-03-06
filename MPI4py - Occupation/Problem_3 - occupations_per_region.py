@@ -98,23 +98,42 @@ print(f"\nProcess {rank} Local Computation Time: {local_processing_time:.4f} sec
 
 
 ### VISUALIZATION ######################################################################################################
+import re
 if rank == 0:
     # Convert results to DataFrame for visualization
     result_df = pd.DataFrame(final_results.items(), columns=["Region_Occupation", "Employee Count"])
     result_df[["Region", "Occupation"]] = pd.DataFrame(result_df["Region_Occupation"].tolist(), index=result_df.index)
     result_df.drop(columns=["Region_Occupation"], inplace=True)
-
-    # Sort by employee count for better visualization
     result_df = result_df.sort_values(by="Employee Count", ascending=False)
 
-    # Set Seaborn theme
+    # Extract numeric part from Region for sorting
+    def extract_region_number(region):
+        match = re.search(r'\d+', region)  # Find numeric part
+        return int(match.group()) if match else float('inf')  
+
+    result_df["Region"] = result_df["Region"].astype(str)  # Ensure Region is string
+    sorted_regions = sorted(result_df["Region"].unique(), key=extract_region_number)  # Sort numerically (ascending)
+
+    # Ensure Occupation is sorted alphabetically
+    sorted_occupations = sorted(result_df["Occupation"].unique())
     sns.set_theme(style="whitegrid")
 
-    # Create bar plot for employee count per occupation in each region
-    plt.figure(figsize=(12, 6))
-    sns.barplot(x="Employee Count", y="Occupation", hue="Region", data=result_df, dodge=True, palette="coolwarm")
-    plt.xlabel("Employee Count")
-    plt.ylabel("Occupation")
-    plt.title("Number of Employees per Occupation in Each Region")
-    plt.legend(title="Region")
+    plt.figure(figsize=(16, 8)) 
+    ax = sns.barplot(
+        x="Employee Count", 
+        y="Region",
+        hue="Occupation", 
+        data=result_df, 
+        dodge=True, 
+        palette="coolwarm", 
+        order=sorted_regions,  # Ensure Regions are plotted in ascending order
+        hue_order=sorted_occupations  # Ensure Occupations are sorted alphabetically
+    )
+
+    plt.xlabel("Employee Count", fontsize=14)
+    plt.ylabel("Region", fontsize=14)  # Updated label
+    plt.title("Number of Employees per Region in Each Occupation", fontsize=16)  # Updated title
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.legend(title="Occupation", bbox_to_anchor=(1.05, 1), loc="upper left")  # Legend updated
     plt.show()
