@@ -1,4 +1,15 @@
 > Make sure to import all necessary libs on 'requirements.txt'
+'''
+COPY PASTE THIS IN TERMINAL FOR QUICK INSTALL (CTRL + `):
+
+all libraries:
+    pip install -r requirements.txt
+
+only the essentials:
+    pip install Flask Flask-Cors pymongo python-dotenv
+
+'''
+
 > Edit the .env file
 
 link for trained gpt chat: 'https://chatgpt.com/share/67f1440e-42d0-8009-850a-4f07f2311660'
