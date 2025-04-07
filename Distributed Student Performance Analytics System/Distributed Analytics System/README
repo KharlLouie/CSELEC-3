@@ -10,6 +10,8 @@ only the essentials:
 
 '''
 
+> install wsl in powershell for redis, and celery
+
 > Edit the .env file
 
 link for trained gpt chat: 'https://chatgpt.com/share/67f1440e-42d0-8009-850a-4f07f2311660'
