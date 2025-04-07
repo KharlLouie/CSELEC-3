@@ -1,14 +1,3 @@
-'''
-COPY PASTE THIS IN TERMINAL FOR QUICK INSTALL (CTRL + `):
-
-> all libraries:
-    pip install -r requirements.txt
-
-> only the essentials:
-    pip install Flask Flask-Cors pymongo python-dotenv
-
-'''
-
 # Core Requirements
 Flask==2.3.2
 Flask-Cors==3.0.10
