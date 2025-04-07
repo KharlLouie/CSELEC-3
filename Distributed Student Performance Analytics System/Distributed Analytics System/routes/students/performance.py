@@ -14,7 +14,7 @@ def get_performance(student_id):
         if not student:
             return jsonify({"error": "Student not found"}), 404
 
-        # Get all semesters for dropdown
+        # Get all semesters
         semesters = list(db.grades.aggregate([
             {"$match": {"StudentID": student_id}},
             {"$lookup": {
@@ -28,18 +28,16 @@ def get_performance(student_id):
                 "semester_id": "$SemesterID",
                 "name": "$semester_info.Semester",
                 "year": "$semester_info.SchoolYear"
-            }}
+            }},
+            {"$sort": {"semester_id": -1}}
         ]))
 
         if not semesters:
             return jsonify({"error": "No semester data found"}), 404
 
-        # Get semester_id from query params (if any)
-        semester_id = request.args.get('semester_id', type=int)
-        if semester_id is None:
-            semester_id = semesters[0]["semester_id"]
+        semester_id = request.args.get("semester_id", default=semesters[0]["semester_id"], type=int)
 
-        # Get performance data for the specified semester
+        # Get performance for selected semester
         semester_data = list(db.grades.aggregate([
             {"$match": {
                 "StudentID": student_id,
@@ -78,13 +76,13 @@ def get_performance(student_id):
         ]))
 
         if not semester_data or not semester_data[0].get('subjects'):
-            return jsonify({"error": "No subject data found for that semester"}), 404
+            return jsonify({"error": "No subject data found"}), 404
 
         subjects = semester_data[0]['subjects']
         grades = [s['grade'] for s in subjects]
         Units = [s['Units'] for s in subjects]
 
-        # Calculate overall GPA (from all semesters)
+        # Calculate GPA
         all_grades = list(db.grades.aggregate([
             {"$match": {"StudentID": student_id}},
             {"$unwind": {"path": "$Grades", "includeArrayIndex": "idx"}},
@@ -114,16 +112,23 @@ def get_performance(student_id):
 
         weighted_average = round(calculate_weighted_average(grades, Units), 2)
 
+        # Lookup class averages from precomputed collection
+        for subject in subjects:
+            class_avg = db.class_averages.find_one({
+                "subject_code": subject["subject_code"],
+                "semester_id": semester_id
+            })
+            subject["class_average"] = round(class_avg["average_grade"], 2) if class_avg else 0.0
+
         return jsonify({
             "student_id": student["_id"],
             "name": student["Name"],
             "course": student["Course"],
             "semesters": semesters,
             "performance": {
-                "semester_id": semester_id,
                 "overall_gpa": round(overall_gpa, 2),
                 "semester_gpa": round(convert_grade_to_gpa(weighted_average), 2),
-                "weighted_average": weighted_average,
+                "weighted_average": round(weighted_average, 2),
                 "subjects": subjects
             }
         })
