@@ -1,5 +1,0 @@
-redis-server
-celery -A app.celery worker --loglevel=info
-python app.py
-
-this a test
