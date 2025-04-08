@@ -7,7 +7,7 @@ class MongoDB:
     def __init__(self):
         if not current_app.config['TESTING']:
             self.client = MongoClient('mongodb://localhost:27017/')
-            self.db = self.client['CSELEC3FINALSDB']
+            self.db = self.client['CSELEC3DB']
 
     @classmethod
     def get_db(cls):

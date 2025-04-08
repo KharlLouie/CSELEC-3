@@ -14,9 +14,9 @@ CORS(app)
 
 # Configuration
 app.config.update({
-    'SECRET_KEY': os.getenv('SECRET_KEY', 'fallback-secret-key'),
+    'SECRET_KEY': os.getenv('SECRET_KEY', 'KokonaBestGirl'),
     'MONGO_URI': os.getenv('MONGO_URI', 'mongodb://localhost:27017/'),
-    'MONGO_DBNAME': os.getenv('MONGO_DBNAME', 'CSELEC3FINALSDB'),
+    'MONGO_DBNAME': os.getenv('MONGO_DBNAME', 'CSELEC3DB'),
     'CELERY_BROKER_URL': os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/1'),
     'CELERY_RESULT_BACKEND': os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/2')
 })
