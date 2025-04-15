@@ -1,7 +1,7 @@
 from flask import Blueprint
 
-# This creates the blueprint
-student_bp = Blueprint('student_bp', __name__)  # Changed name for clarity
+# Create the blueprint WITHOUT url_prefix here
+student_bp = Blueprint('student_bp', __name__)
 
-# These imports MUST come after blueprint creation
+# Import routes after blueprint creation
 from . import performance, subjects, at_risk

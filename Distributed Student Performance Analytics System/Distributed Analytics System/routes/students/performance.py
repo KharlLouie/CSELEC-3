@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from db.mongodb import get_db
 from utils.gpa_calculator import convert_grade_to_gpa, calculate_weighted_average
+from utils.semesters import fetch_all_semesters  # <- Import the util
 
 from . import student_bp
 
@@ -14,28 +15,12 @@ def get_performance(student_id):
         if not student:
             return jsonify({"error": "Student not found"}), 404
 
-        # Get all semesters
-        semesters = list(db.grades.aggregate([
-            {"$match": {"StudentID": student_id}},
-            {"$lookup": {
-                "from": "semesters",
-                "localField": "SemesterID",
-                "foreignField": "_id",
-                "as": "semester_info"
-            }},
-            {"$unwind": "$semester_info"},
-            {"$project": {
-                "semester_id": "$SemesterID",
-                "name": "$semester_info.Semester",
-                "year": "$semester_info.SchoolYear"
-            }},
-            {"$sort": {"semester_id": -1}}
-        ]))
-
+        # Get all semesters from util
+        semesters = fetch_all_semesters()
         if not semesters:
             return jsonify({"error": "No semester data found"}), 404
 
-        semester_id = request.args.get("semester_id", default=semesters[0]["semester_id"], type=int)
+        semester_id = request.args.get("semester_id", default=semesters[0]["id"], type=int)
 
         # Get performance for selected semester
         semester_data = list(db.grades.aggregate([
@@ -112,7 +97,7 @@ def get_performance(student_id):
 
         weighted_average = round(calculate_weighted_average(grades, Units), 2)
 
-        # Lookup class averages from precomputed collection
+        # Lookup class averages
         for subject in subjects:
             class_avg = db.class_averages.find_one({
                 "subject_code": subject["subject_code"],
