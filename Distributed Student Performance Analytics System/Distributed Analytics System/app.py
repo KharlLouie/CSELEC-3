@@ -79,6 +79,8 @@ def trigger_celery_task(student_id):
 # Import and register blueprints
 from routes.students import student_bp
 app.register_blueprint(student_bp, url_prefix='/students')
+from routes.subjects import subject_bp
+app.register_blueprint(subject_bp, url_prefix='/subjects')
 
 @app.route('/')
 def home():
