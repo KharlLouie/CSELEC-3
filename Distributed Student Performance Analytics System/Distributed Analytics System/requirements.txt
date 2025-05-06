@@ -1,28 +1,16 @@
 # Core Requirements
-Flask==2.3.2
-Flask-Cors==3.0.10
-pymongo==4.5.0
-python-dotenv==1.0.0
+Flask
+Flask-Cors
+pymongo
+python-dotenv
+Flask-caching
 
 # Development & Testing
-pytest==7.4.0
-pytest-cov==4.1.0
-requests==2.31.0
-Faker==19.6.2
-
-# API Documentation (Optional)
-flask-swagger-ui==4.11.1
-flasgger==0.9.7.1
-
-# Performance Optimization
-gunicorn==21.2.0
-gevent==23.9.1
+pytest
+pytest-cov
+requests
+Faker
 
 # Data Analysis (Optional)
-numpy==1.26.0
-pandas==2.1.1
-
-# Task Queue and Monitoring
-redis==4.5.5
-celery==5.3.1
-flower==1.2.0  # Optional for monitoring 
+numpy
+pandas

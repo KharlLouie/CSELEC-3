@@ -22,7 +22,7 @@ def get_at_risk_students():
             "Grades": {"$elemMatch": {"$lt": 80}}
         }
 
-        # Filter by semester if provided (cast to int)
+        # Filter by semester if provided
         if semester_id:
             match_conditions["SemesterID"] = int(semester_id)
 
@@ -45,7 +45,7 @@ def get_at_risk_students():
             {"$unwind": "$semester"},
         ]
 
-        # Add search filter after student data is available
+        # Add search filter if search term exists
         if search_term:
             pipeline.append({
                 "$match": {
@@ -65,11 +65,23 @@ def get_at_risk_students():
         # Run the pipeline
         results = list(db.grades.aggregate(pipeline))
 
+        # Fetch all semesters for dropdown
+        semesters = list(db.semesters.find({}, {"_id": 1, "Semester": 1, "SchoolYear": 1}))
+        semesters_list = [
+            {
+                "semester_id": sem["_id"],
+                "semester_name": sem["Semester"],
+                "school_year": sem["SchoolYear"]
+            }
+            for sem in semesters
+        ]
+
         return jsonify({
             "success": True,
             "count": len(results),
             "page": page,
             "limit": per_page,
+            "semesters": semesters_list,
             "data": results
         })
 
