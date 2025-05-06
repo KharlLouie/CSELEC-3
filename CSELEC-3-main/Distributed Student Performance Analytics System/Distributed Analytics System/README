@@ -1,0 +1,24 @@
+> Make sure to import all necessary libs on 'requirements.txt'
+'''
+COPY PASTE THIS IN TERMINAL FOR QUICK INSTALL (CTRL + `):
+
+all libraries:
+    pip install -r requirements.txt
+
+only the essentials:
+    pip install Flask Flask-Cors pymongo python-dotenv
+
+'''
+
+> install wsl in powershell for redis, and celery
+
+> Edit the .env file and mongodb.py
+
+link for trained gpt chat: 'https://chatgpt.com/share/67f1440e-42d0-8009-850a-4f07f2311660'
+
+
+P.S. learn to push and basic things in gitHub or smth. 
+Branch if you make major changes to existing codes so we don't lose the vanilla version.
+
+Happy Coding
+- Rign3
