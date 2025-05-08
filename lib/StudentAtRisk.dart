@@ -115,41 +115,56 @@ class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> {
                   ),
                 ),
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: students.length,
-                    itemBuilder: (context, index) {
-                      final student = students[index];
-                      final subjects = student['SubjectCodes'] ?? [];
-                      final grades = student['Grades'] ?? [];
-
-                      return Card(
-                        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                student['student']['Name'] ?? 'Unknown',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                              SizedBox(height: 4),
-                              Text('Course: ${student['student']['Course'] ?? 'N/A'}'),
-                              Text('Semester: ${student['semester']['SchoolYear']} - ${student['semester']['Semester']}'),
-                              Divider(height: 16),
-                              ...List.generate(subjects.length, (subIndex) {
-                                return Text(
-                                  '${subjects[subIndex]} - Grade: ${grades[subIndex]}',
-                                  style: TextStyle(
-                                    color: (grades[subIndex] < 80) ? Colors.red : Colors.black,
+                  child: Container(
+                    width: 1900,
+                    //scrollDirection: Axis.vertical,
+                    child: DataTable(
+                      decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+                                  ],
+                                ),
+                      columns: const [
+                        DataColumn(label: Text('Student ID')),
+                        DataColumn(label: Text('Course')),
+                        DataColumn(label: Text('Year and Semester')),
+                        DataColumn(label: Text('Risk Factors')),
+                      ],
+                      rows: students.map<DataRow>((student) {
+                        final subjects = student['SubjectCodes'] ?? [];
+                        final grades = student['Grades'] ?? [];
+                        final riskFactors = <String>[];
+                        for (int i = 0; i < subjects.length; i++) {
+                          final grade = grades[i];
+                          if (grade >= 70 && grade <= 79) {
+                            riskFactors.add('${subjects[i]}: $grade');
+                          }
+                        }
+                        return DataRow(cells: [
+                          DataCell(Text(student['student']['_id']?.toString() ?? 'Unknown')),
+                          DataCell(Text(student['student']['Course'] ?? 'N/A')),
+                          DataCell(Text('${student['semester']['SchoolYear']} - ${student['semester']['Semester']}')),
+                          DataCell(
+                            riskFactors.isNotEmpty
+                              ? SizedBox(
+                                  height: 80, // Set your preferred max height here
+                                  child: SingleChildScrollView(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: riskFactors
+                                          .map((rf) => Text(rf, style: TextStyle(color: Colors.red)))
+                                          .toList(),
+                                    ),
                                   ),
-                                );
-                              }),
-                            ],
+                                )
+                              : const Text('None'),
                           ),
-                        ),
-                      );
-                    },
+                        ]);
+                      }).toList(),
+                    ),
                   ),
                 ),
                 Padding(
