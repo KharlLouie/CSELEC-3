@@ -8,7 +8,7 @@ class StudentPerformancePage extends StatefulWidget {
 }
 
 class _StudentPerformancePageState extends State<StudentPerformancePage> {
-  // “All”‑view data
+  // "All"‑view data
   List<dynamic> students = [];
   int limit = 10, page = 1;
 
@@ -137,7 +137,7 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
             TextField(
               controller: _studentIdController,
               decoration: InputDecoration(
-                labelText: 'Enter Student ID (or leave blank for all)',
+                labelText: 'Enter Student ID (Leave blank and Fetch to reveal all student list)',
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.number,
@@ -145,7 +145,7 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
             SizedBox(height: 8),
             ElevatedButton(
               onPressed: _onFetchPressed,
-              child: Text('Fetch Performance'),
+              child: Text('Fetch Data'),
             ),
             SizedBox(height: 16),
 
@@ -229,26 +229,33 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
 
               if (studentId != null && subjects.isNotEmpty) ...[
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: subjects.length,
-                    itemBuilder: (_, i) {
-                      final sub = subjects[i];
-                      return Card(
-                        margin: EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          title: Text(
-                              '${sub['subject_code']} – ${sub['description']}'),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Grade: ${sub['grade']}'),
-                              Text('Units: ${sub['Units']}'),
-                              Text('Class Avg: ${sub['class_average']}'),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                  child: Container(
+                    //scrollDirection: Axis.horizontal,
+                    width:double.infinity,
+                    child: DataTable(
+                      decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+                                  ],
+                                ),
+                      columns: const [
+                        DataColumn(label: Text('Subject Code')),
+                        DataColumn(label: Text('Student Grade')),
+                        DataColumn(label: Text('Units')),
+                        DataColumn(label: Text('Class Average')),
+                      ],
+                      
+                      rows: subjects.map<DataRow>((sub) {
+                        return DataRow(cells: [
+                          DataCell(Text(sub['subject_code'].toString())),
+                          DataCell(Text(sub['grade'].toString())),
+                          DataCell(Text(sub['Units'].toString())),
+                          DataCell(Text(sub['class_average'].toString())),
+                        ]);
+                      }).toList(),
+                    ),
                   ),
                 ),
               ],
