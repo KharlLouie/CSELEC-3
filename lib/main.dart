@@ -40,12 +40,28 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   String? selectedSemester;
 
   List<int> schoolYears = [];
-  final List<String> semesters = ['FirstSem', 'SecondSem', 'Summer'];
 
   double? passingRate;
   double? atRiskRate;
   double? averageGrade;
   double? topGrade;
+
+  // Add state variables for both semesters
+  double? firstSemAverageGrade;
+  double? firstSemPassingRate;
+  double? firstSemAtRiskRate;
+  double? firstSemTopGrade;
+
+  double? secondSemAverageGrade;
+  double? secondSemPassingRate;
+  double? secondSemAtRiskRate;
+  double? secondSemTopGrade;
+
+  // Add state variables for Summer semester
+  double? summerAverageGrade;
+  double? summerPassingRate;
+  double? summerAtRiskRate;
+  double? summerTopGrade;
 
   @override
   void initState() {
@@ -85,7 +101,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   }
 
   Future<void> fetchSemesterData() async {
-    if (selectedSchoolYear == null || selectedSemester == null) return;
+    if (selectedSchoolYear == null) return;
 
     final url = Uri.parse('http://127.0.0.1:5000/home/?sy=$selectedSchoolYear');
     try {
@@ -94,19 +110,35 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
         final data = jsonDecode(response.body);
         final List semestersData = data['semesters'];
 
-        final semesterData = semestersData.firstWhere(
-          (s) => s['semester_name'] == selectedSemester,
+        final firstSemData = semestersData.firstWhere(
+          (s) => s['semester_name'] == 'FirstSem',
+          orElse: () => null,
+        );
+        final secondSemData = semestersData.firstWhere(
+          (s) => s['semester_name'] == 'SecondSem',
+          orElse: () => null,
+        );
+        final summerSemData = semestersData.firstWhere(
+          (s) => s['semester_name'] == 'Summer',
           orElse: () => null,
         );
 
-        if (semesterData != null) {
-          setState(() {
-            passingRate = semesterData['passing_rate']?.toDouble();
-            atRiskRate = semesterData['at_risk_rate']?.toDouble();
-            averageGrade = semesterData['average_grade']?.toDouble();
-            topGrade = semesterData['top_grade']?.toDouble();
-          });
-        }
+        setState(() {
+          firstSemAverageGrade = firstSemData != null ? firstSemData['average_grade']?.toDouble() : null;
+          firstSemPassingRate = firstSemData != null ? firstSemData['passing_rate']?.toDouble() : null;
+          firstSemAtRiskRate = firstSemData != null ? firstSemData['at_risk_rate']?.toDouble() : null;
+          firstSemTopGrade = firstSemData != null ? firstSemData['top_grade']?.toDouble() : null;
+
+          secondSemAverageGrade = secondSemData != null ? secondSemData['average_grade']?.toDouble() : null;
+          secondSemPassingRate = secondSemData != null ? secondSemData['passing_rate']?.toDouble() : null;
+          secondSemAtRiskRate = secondSemData != null ? secondSemData['at_risk_rate']?.toDouble() : null;
+          secondSemTopGrade = secondSemData != null ? secondSemData['top_grade']?.toDouble() : null;
+
+          summerAverageGrade = summerSemData != null ? summerSemData['average_grade']?.toDouble() : null;
+          summerPassingRate = summerSemData != null ? summerSemData['passing_rate']?.toDouble() : null;
+          summerAtRiskRate = summerSemData != null ? summerSemData['at_risk_rate']?.toDouble() : null;
+          summerTopGrade = summerSemData != null ? summerSemData['top_grade']?.toDouble() : null;
+        });
       }
     } catch (e) {
       print("Error fetching semester data: $e");
@@ -198,7 +230,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                                   style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
                               SizedBox(height: 8),
                               Container(
-                                width: 1000,
+                                width: 1200,
                                 padding: EdgeInsets.symmetric(horizontal: 16),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
@@ -228,15 +260,11 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                                 ),
                               ),
 
-                              SizedBox(height: 20),
+                              SizedBox(height: 60),
 
-                              // Semester Dropdown
-                              Text('Semester:',
-                                  style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
-                              SizedBox(height: 8),
+                              // Table for metrics
                               Container(
-                                width: 1000,
-                                padding: EdgeInsets.symmetric(horizontal: 16),
+                                width: double.infinity,
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(12),
@@ -244,47 +272,47 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                                     BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
                                   ],
                                 ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: selectedSemester,
-                                    hint: Text("Select Semester"),
-                                    onChanged: (value) {
-                                      setState(() {
-                                        selectedSemester = value;
-                                      });
-                                      fetchSemesterData();
-                                    },
-                                    items: semesters.map((sem) {
-                                      return DropdownMenuItem<String>(
-                                        value: sem,
-                                        child: Text(sem),
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              ),
-
-                              SizedBox(height: 20),
-
-                              Row(
-                                children: [
-                                  Expanded(child: _buildMetricCard('Passing Rate', passingRate)),
-                                  SizedBox(width: 20),
-                                  Expanded(child: _buildMetricCard('At-Risk Rate', atRiskRate)),
-                                ],
-                              ),
-
-                              SizedBox(height: 30),
-
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Expanded(child: _buildMetricCard('Average Grade', averageGrade)),
-                                    SizedBox(width: 20),
-                                    Expanded(child: _buildMetricCard('Top Grade', topGrade)),
+                                child: DataTable(
+                                  columns: const [
+                                    DataColumn(label: Text('Metric', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    DataColumn(label: Text('First Semester', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    DataColumn(label: Text('Second Semester', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    DataColumn(label: Text('Summer Semester', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    DataColumn(label: Text('Change (First and Second Semester)', style: TextStyle(fontWeight: FontWeight.bold))),
+                                  ],
+                                  rows: [
+                                    DataRow(cells: [
+                                      const DataCell(Text('Average GPA')),
+                                      DataCell(Text(firstSemAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                      DataCell(Text(secondSemAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                      DataCell(Text(summerAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                      DataCell(Text((secondSemAverageGrade != null && firstSemAverageGrade != null) ? (secondSemAverageGrade! - firstSemAverageGrade!).toStringAsFixed(2) : 'N/A')),
+                                    ]),
+                                    DataRow(cells: [
+                                      const DataCell(Text('Passing Rate (%)')),
+                                      DataCell(_percentCell(firstSemPassingRate)),
+                                      DataCell(_percentCell(secondSemPassingRate)),
+                                      DataCell(_percentCell(summerPassingRate)),
+                                      DataCell(_percentCell((secondSemPassingRate != null && firstSemPassingRate != null) ? (secondSemPassingRate! - firstSemPassingRate!) : null)),
+                                    ]),
+                                    DataRow(cells: [
+                                      const DataCell(Text('Top Grade')),
+                                      DataCell(Text(firstSemTopGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                      DataCell(Text(secondSemTopGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                      DataCell(Text(summerTopGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                      DataCell(Text((secondSemTopGrade != null && firstSemTopGrade != null) ? (secondSemTopGrade! - firstSemTopGrade!).toStringAsFixed(2) : 'N/A')),
+                                    ]),
+                                    DataRow(cells: [
+                                      const DataCell(Text('At-Risk Students (%)')),
+                                      DataCell(_percentCell(firstSemAtRiskRate)),
+                                      DataCell(_percentCell(secondSemAtRiskRate)),
+                                      DataCell(_percentCell(summerAtRiskRate)),
+                                      DataCell(_percentCell((secondSemAtRiskRate != null && firstSemAtRiskRate != null) ? (secondSemAtRiskRate! - firstSemAtRiskRate!) : null)),
+                                    ]),
                                   ],
                                 ),
-                              )
+                              ),
+                              SizedBox(height: 30),
                             ],
                           ),
                         ),
@@ -319,22 +347,15 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
     );
   }
 
-  Widget _buildMetricCard(String title, double? value) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: TextStyle(fontSize: 16, color: Colors.grey[700])),
-            SizedBox(height: 10),
-            Text(value?.toStringAsFixed(2) ?? 'N/A',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ),
+  // Helper widget for percentage display
+  Widget _percentCell(double? value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(value != null ? value.toStringAsFixed(2) : 'N/A'),
+        SizedBox(width: 4),
+        Text('%', style: TextStyle(color: Colors.grey)),
+      ],
     );
   }
 }
