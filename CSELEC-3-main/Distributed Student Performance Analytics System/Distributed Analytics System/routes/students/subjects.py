@@ -11,47 +11,65 @@ def get_subjects(student_id):
     try:
         db = get_db()
         
-        # Get all subjects taken by the student
-        student_subjects = db.grades.aggregate([
-            {"$match": {"StudentID": student_id}},
-            {"$unwind": "$SubjectCodes"},
-            {"$group": {"_id": None, "subjects": {"$addToSet": "$SubjectCodes"}}}
-        ])
-        
-        if not student_subjects:
-            return format_response(error="No subjects found", status_code=404)
-            
-        # Get performance data
+        # Optimized pipeline to get all required data in a single query
         pipeline = [
-            {"$match": {"SubjectCodes": {"$in": student_subjects[0]["subjects"]}}},
+            {"$match": {"StudentID": student_id}},
             {"$unwind": {"path": "$SubjectCodes", "includeArrayIndex": "idx"}},
-            {"$group": {
-                "_id": "$SubjectCodes",
-                "class_avg": {"$avg": {"$arrayElemAt": ["$Grades", "$idx"]}},
-                "student_grade": {
-                    "$avg": {
-                        "$cond": [
-                            {"$eq": ["$StudentID", student_id]},
-                            {"$arrayElemAt": ["$Grades", "$idx"]},
-                            None
-                        ]
-                    }
-                }
-            }},
+            {"$unwind": {"path": "$Grades", "includeArrayIndex": "gidx"}},
+            {"$match": {"$expr": {"$eq": ["$idx", "$gidx"]}}},
             {"$lookup": {
                 "from": "subjects",
-                "localField": "_id",
+                "localField": "SubjectCodes",
                 "foreignField": "_id",
                 "as": "subject"
             }},
             {"$unwind": "$subject"},
+            {"$group": {
+                "_id": "$SubjectCodes",
+                "student_grade": {"$avg": "$Grades"},
+                "description": {"$first": "$subject.Description"},
+                "units": {"$first": "$subject.Units"}
+            }},
+            {"$lookup": {
+                "from": "class_averages",
+                "let": {"subject_code": "$_id"},
+                "pipeline": [
+                    {"$match": {
+                        "$expr": {"$eq": ["$subject_code", "$$subject_code"]}
+                    }},
+                    {"$group": {
+                        "_id": None,
+                        "class_avg": {"$avg": "$average_grade"}
+                    }}
+                ],
+                "as": "class_avg_data"
+            }},
             {"$project": {
                 "subject_code": "$_id",
-                "description": "$subject.Description",
-                "units": "$subject.units",
-                "student_grade": 1,
-                "class_avg": 1,
-                "difference": {"$subtract": ["$student_grade", "$class_avg"]}
+                "description": 1,
+                "units": 1,
+                "student_grade": {"$round": ["$student_grade", 2]},
+                "class_avg": {
+                    "$round": [
+                        {"$ifNull": [
+                            {"$arrayElemAt": ["$class_avg_data.class_avg", 0]},
+                            0
+                        ]},
+                        2
+                    ]
+                },
+                "difference": {
+                    "$round": [
+                        {"$subtract": [
+                            "$student_grade",
+                            {"$ifNull": [
+                                {"$arrayElemAt": ["$class_avg_data.class_avg", 0]},
+                                0
+                            ]}
+                        ]},
+                        2
+                    ]
+                }
             }}
         ]
         

@@ -17,17 +17,15 @@ def get_subject_analytics():
         skip = (page - 1) * per_page
         match_filter = {}
 
-        # Filter by semester only if semester_id is specified
+        # Optimize semester filtering
         if semester_id:
             match_filter['semester_id'] = semester_id
-
-        # Filter by year only if year is specified
-        if year:
-            matching_semesters = db.semesters.find(
+        elif year:
+            # Get semester IDs for the year in a single query
+            semester_ids = [s["_id"] for s in db.semesters.find(
                 {"SchoolYear": year},
                 {"_id": 1}
-            )
-            semester_ids = [s["_id"] for s in matching_semesters]
+            )]
             if semester_ids:
                 match_filter['semester_id'] = {"$in": semester_ids}
             else:
@@ -39,13 +37,20 @@ def get_subject_analytics():
                     "semesters": []
                 })
 
-        # Pipeline for paginated subject analytics
+        # Optimized pipeline for subject analytics
         pipeline = [
             {"$match": match_filter},
+            {"$lookup": {
+                "from": "subjects",
+                "localField": "subject_code",
+                "foreignField": "_id",
+                "as": "subject_info"
+            }},
+            {"$unwind": "$subject_info"},
             {"$project": {
                 "_id": 0,
                 "subject_code": 1,
-                "subject_description": 1,
+                "subject_description": "$subject_info.Description",
                 "semester_id": 1,
                 "average_grade": {"$round": ["$average_grade", 2]},
                 "passing_rate": {"$round": ["$passing_rate", 2]},
@@ -57,17 +62,22 @@ def get_subject_analytics():
             {"$limit": per_page}
         ]
 
-        analytics_data = list(db.class_averages.aggregate(pipeline))
+        # Get total count and results in parallel
         total_subjects = db.class_averages.count_documents(match_filter)
+        analytics_data = list(db.class_averages.aggregate(pipeline))
 
-        # Get dropdown options for all semesters
-        all_semesters = list(db.semesters.find({}, {"_id": 1, "Semester": 1, "SchoolYear": 1}))
-        semesters_dropdown = [
+        # Get semester options in a single optimized query
+        semesters_dropdown = list(db.semesters.find(
+            {},
+            {"_id": 1, "Semester": 1, "SchoolYear": 1}
+        ).sort([("SchoolYear", -1), ("Semester", 1)]))
+
+        formatted_semesters = [
             {
                 "id": s["_id"],
                 "label": f"{s['Semester']} {s['SchoolYear']}"
             }
-            for s in all_semesters
+            for s in semesters_dropdown
         ]
 
         return jsonify({
@@ -75,7 +85,7 @@ def get_subject_analytics():
             "per_page": per_page,
             "total_subjects": total_subjects,
             "subjects": analytics_data,
-            "semesters": semesters_dropdown
+            "semesters": formatted_semesters
         })
 
     except Exception as e:

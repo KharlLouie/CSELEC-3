@@ -11,26 +11,37 @@ def school_year_summary():
     selected_sy = request.args.get('sy', type=int)
 
     try:
-        # Step 1: Get all school years from semesters
-        semesters = list(db.semesters.find({}, {"_id": 1, "Semester": 1, "SchoolYear": 1}))
+        # Get all school years and semesters in a single optimized query
+        semesters = list(db.semesters.find(
+            {},
+            {"_id": 1, "Semester": 1, "SchoolYear": 1}
+        ).sort([("SchoolYear", 1), ("Semester", 1)]))
+        
         all_school_years = sorted(set(s['SchoolYear'] for s in semesters))
 
         # If no school year selected, just return dropdown list
         if not selected_sy:
             return jsonify({"school_years": all_school_years})
 
-        # Step 2: Find semesters for selected school year
-        selected_semesters = [s for s in semesters if s['SchoolYear'] == selected_sy]
-
-        if not selected_semesters:
+        # Get selected semesters and their metrics in a single optimized query
+        selected_semester_ids = [s['_id'] for s in semesters if s['SchoolYear'] == selected_sy]
+        
+        if not selected_semester_ids:
             return jsonify({"error": "No semesters found for that school year.", "school_years": all_school_years}), 404
 
-        semester_metrics_list = []
+        # Get all metrics for selected semesters in one query
+        metrics_data = {
+            m['semester_id']: m 
+            for m in db.semester_metrics.find(
+                {"semester_id": {"$in": selected_semester_ids}},
+                {"_id": 0, "semester_id": 1, "average_grade": 1, "passing_rate": 1, "top_grade": 1, "at_risk_rate": 1}
+            )
+        }
 
-        for sem in selected_semesters:
-            # Look up metrics based on semester _id
-            metrics = db.semester_metrics.find_one({"semester_id": sem['_id']}, {"_id": 0})
-            if metrics:
+        semester_metrics_list = []
+        for sem in semesters:
+            if sem['SchoolYear'] == selected_sy:
+                metrics = metrics_data.get(sem['_id'], {})
                 semester_metrics_list.append({
                     "semester_name": sem['Semester'],
                     "average_grade": metrics.get('average_grade'),
@@ -38,16 +49,8 @@ def school_year_summary():
                     "top_grade": metrics.get('top_grade'),
                     "at_risk_rate": metrics.get('at_risk_rate')
                 })
-            else:
-                semester_metrics_list.append({
-                    "semester_name": sem['Semester'],
-                    "average_grade": None,
-                    "passing_rate": None,
-                    "top_grade": None,
-                    "at_risk_rate": None
-                })
 
-        # Step 3: If exactly 2 semesters (ex: FirstSem and SecondSem), compute changes
+        # Calculate changes if we have exactly 2 semesters
         changes = {}
         if len(semester_metrics_list) == 2:
             first = semester_metrics_list[0]
