@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify
 from db.mongodb import get_db
+from cache_config import cache
 
 genrep_bp = Blueprint('genrep_bp', __name__)
 
 @genrep_bp.route('/', methods=['GET'])
+@cache.cached(timeout=300, query_string=True)
 def school_year_summary():
     db = get_db()
     selected_sy = request.args.get('sy', type=int)
@@ -72,5 +74,5 @@ def school_year_summary():
 
         return jsonify(response)
 
-    except Exception as e:
+     except Exception as e:
         return jsonify({"error": str(e)}), 500

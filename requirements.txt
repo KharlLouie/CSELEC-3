@@ -1,0 +1,16 @@
+# Core Requirements
+Flask
+Flask-Cors
+pymongo
+python-dotenv
+Flask-caching=1.10.1
+
+# Development & Testing
+pytest
+pytest-cov
+requests
+Faker
+
+# Data Analysis (Optional)
+numpy
+pandas

@@ -1,8 +1,10 @@
 from flask import Blueprint, jsonify, request
 from db.mongodb import get_db
+from cache_config import cache
 from . import subject_bp
 
 @subject_bp.route('/analytics', methods=['GET'])
+@cache.cached(timeout=300, query_string=True)
 def get_subject_analytics():
     db = get_db()
 

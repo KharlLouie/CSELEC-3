@@ -1,10 +1,12 @@
 from flask import Blueprint, jsonify
 from db.mongodb import get_db
 from utils.response_formatter import format_response
+from cache_config import cache
 
 from . import student_bp
 
 @student_bp.route('/subjects/<int:student_id>')
+@cache.cached(timeout=300, query_string=True)
 def get_subjects(student_id):
     try:
         db = get_db()

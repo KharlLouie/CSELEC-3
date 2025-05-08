@@ -1,8 +1,10 @@
 from flask import jsonify, request
 from db.mongodb import get_db
 from . import student_bp
+from cache_config import cache
 
 @student_bp.route('/at_risk', methods=['GET'])
+@cache.cached(timeout=300, query_string=True)
 def get_at_risk_students():
     db = get_db()
 

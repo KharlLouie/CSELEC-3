@@ -2,10 +2,12 @@ from flask import Blueprint, jsonify, request
 from db.mongodb import get_db
 from utils.gpa_calculator import convert_grade_to_gpa, calculate_weighted_average
 from utils.semesters import fetch_all_semesters
+from cache_config import cache
 
 from . import student_bp
 
 @student_bp.route('/performance/<int:student_id>')
+@cache.cached(timeout=300, query_string=True)
 def get_performance(student_id):
     db = get_db()
 
@@ -113,6 +115,7 @@ def get_performance(student_id):
 
 
 @student_bp.route('/performance/all')
+@cache.cached(timeout=300, query_string=True)
 def get_all_student_performance():
     db = get_db()
 

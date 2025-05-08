@@ -16,7 +16,13 @@ app.config.update({
     'SECRET_KEY': os.getenv('SECRET_KEY', 'secret_key'),
     'MONGO_URI': os.getenv('MONGO_URI', 'mongodb://localhost:27017/'),
     'MONGO_DBNAME': os.getenv('MONGO_DBNAME', 'CSELEC3DB'),
+    'CACHE_TYPE': 'SimpleCache',   # In-memory cache
+    'CACHE_DEFAULT_TIMEOUT': 300   # Cache timeout: 5 minutes
 })
+
+# Initialize shared cache
+from cache_config import cache
+cache.init_app(app)
 
 # Initialize MongoDB
 try:
@@ -28,8 +34,9 @@ try:
 except Exception as e:
     print(f"❌ MongoDB Connection Failed: {e}")
 
-# Simple Test Route
+# Cached test route
 @app.route('/test-mongo')
+@cache.cached()
 def test_mongo():
     try:
         student_count = db.students.count_documents({})
