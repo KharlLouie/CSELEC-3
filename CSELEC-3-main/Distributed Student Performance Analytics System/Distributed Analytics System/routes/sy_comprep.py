@@ -74,5 +74,5 @@ def school_year_summary():
 
         return jsonify(response)
 
-     except Exception as e:
+    except Exception as e:
         return jsonify({"error": str(e)}), 500

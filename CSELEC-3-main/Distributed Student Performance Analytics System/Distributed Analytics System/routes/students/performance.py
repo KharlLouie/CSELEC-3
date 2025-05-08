@@ -12,7 +12,8 @@ def get_performance(student_id):
     db = get_db()
 
     try:
-        student = db.students.find_one({"_id": student_id})
+        # Get student and semester data in parallel
+        student = db.students.find_one({"_id": student_id}, {"_id": 1, "Name": 1, "Course": 1})
         if not student:
             return jsonify({"error": "Student not found"}), 404
 
@@ -22,8 +23,9 @@ def get_performance(student_id):
 
         semester_id = request.args.get("semester_id", default=semesters[0]["id"], type=int)
 
-        semester_data = list(db.grades.aggregate([
-            {"$match": {"StudentID": student_id, "SemesterID": semester_id}},
+        # Optimized pipeline to get all required data in a single query
+        pipeline = [
+            {"$match": {"StudentID": student_id}},
             {"$lookup": {
                 "from": "subjects",
                 "localField": "SubjectCodes",
@@ -31,6 +33,7 @@ def get_performance(student_id):
                 "as": "subjects"
             }},
             {"$project": {
+                "semester_id": "$SemesterID",
                 "subjects": {
                     "$map": {
                         "input": {"$range": [0, {"$size": "$SubjectCodes"}]},
@@ -53,8 +56,11 @@ def get_performance(student_id):
                         }
                     }
                 }
-            }}
-        ]))
+            }},
+            {"$match": {"semester_id": semester_id}}
+        ]
+
+        semester_data = list(db.grades.aggregate(pipeline))
 
         if not semester_data or not semester_data[0].get("subjects"):
             return jsonify({"error": "No subject data found"}), 404
@@ -63,39 +69,24 @@ def get_performance(student_id):
         grades = [s["grade"] for s in subjects]
         Units = [s["Units"] for s in subjects]
 
-        all_grades = list(db.grades.aggregate([
-            {"$match": {"StudentID": student_id}},
-            {"$unwind": {"path": "$SubjectCodes", "includeArrayIndex": "idx"}},
-            {"$unwind": {"path": "$Grades", "includeArrayIndex": "gidx"}},
-            {"$match": {"$expr": {"$eq": ["$idx", "$gidx"]}}},
-            {"$lookup": {
-                "from": "subjects",
-                "localField": "SubjectCodes",
-                "foreignField": "_id",
-                "as": "subject_data"
-            }},
-            {"$unwind": "$subject_data"},
-            {"$project": {
-                "grade": "$Grades",
-                "Units": "$subject_data.Units"
-            }}
-        ]))
-
-        overall_gpa = convert_grade_to_gpa(
-            calculate_weighted_average(
-                [g["grade"] for g in all_grades],
-                [g["Units"] for g in all_grades]
-            )
-        ) if all_grades else 0.0
+        # Get overall GPA from precomputed collection
+        gpa_entry = db.student_gpas.find_one({"student_id": student_id})
+        overall_gpa = round(gpa_entry.get("gpa", 0.0), 2) if gpa_entry else 0.0
 
         weighted_average = round(calculate_weighted_average(grades, Units), 2)
 
+        # Get class averages in bulk
+        subject_codes = [s["subject_code"] for s in subjects]
+        class_averages = {
+            ca["subject_code"]: ca["average_grade"]
+            for ca in db.class_averages.find(
+                {"subject_code": {"$in": subject_codes}, "semester_id": semester_id},
+                {"subject_code": 1, "average_grade": 1, "_id": 0}
+            )
+        }
+
         for subject in subjects:
-            class_avg = db.class_averages.find_one({
-                "subject_code": subject["subject_code"],
-                "semester_id": semester_id
-            })
-            subject["class_average"] = round(class_avg["average_grade"], 2) if class_avg else 0.0
+            subject["class_average"] = round(class_averages.get(subject["subject_code"], 0.0), 2)
 
         return jsonify({
             "student_id": student["_id"],
@@ -103,7 +94,7 @@ def get_performance(student_id):
             "course": student["Course"],
             "semesters": semesters,
             "performance": {
-                "overall_gpa": round(overall_gpa, 2),
+                "overall_gpa": overall_gpa,
                 "semester_gpa": round(convert_grade_to_gpa(weighted_average), 2),
                 "weighted_average": weighted_average,
                 "subjects": subjects
@@ -125,25 +116,26 @@ def get_all_student_performance():
         limit = 10
         skip = (page - 1) * limit
 
-        students_cursor = db.students.find({}, {"_id": 1, "Name": 1}).skip(skip).limit(limit)
-        students = list(students_cursor)
+        # Optimized query to get students with their GPAs in a single operation
+        pipeline = [
+            {"$lookup": {
+                "from": "student_gpas",
+                "localField": "_id",
+                "foreignField": "student_id",
+                "as": "gpa_data"
+            }},
+            {"$unwind": {"path": "$gpa_data", "preserveNullAndEmptyArrays": True}},
+            {"$project": {
+                "student_id": "$_id",
+                "name": "$Name",
+                "overall_gpa": {"$round": ["$gpa_data.gpa", 2]},
+                "weighted_average": {"$round": ["$gpa_data.weighted_average", 2]}
+            }},
+            {"$skip": skip},
+            {"$limit": limit}
+        ]
 
-        results = []
-
-        for student in students:
-            student_id = student["_id"]
-
-            # Fetch precomputed GPA and weighted average from student_gpas collection
-            gpa_entry = db.student_gpas.find_one({"student_id": student_id})
-            if not gpa_entry:
-                continue  # Skip if no GPA data found
-
-            results.append({
-                "student_id": student_id,
-                "name": student["Name"],
-                "overall_gpa": round(gpa_entry.get("gpa", 0.0), 2),
-                "weighted_average": round(gpa_entry.get("weighted_average", 0.0), 2)
-            })
+        results = list(db.students.aggregate(pipeline))
 
         return jsonify({
             "page": page,
