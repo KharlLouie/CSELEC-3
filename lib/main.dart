@@ -345,7 +345,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Host Address',
+                                    Text('Host Address (Developer Test)',
                                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                     SizedBox(height: 8),
                                     Row(
