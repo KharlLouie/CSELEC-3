@@ -107,49 +107,40 @@ class _SubjectAnalyticsPageState extends State<SubjectAnalyticsPage> {
                   child: Column(
                     children: [
                       Expanded(
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          itemCount: subjects.length,
-                          itemBuilder: (context, index) {
-                            final subject = subjects[index];
-                            return Card(
-                              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: ListTile(
-                                title: Text('${subject['subject_code']} - ${subject['subject_description']}'),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SizedBox(height: 8),
-                                    Text('Average Grade: ${subject['average_grade']}%'),
-                                    Text('Passing Rate: ${subject['passing_rate']}%'),
-                                    Text('At Risk Rate: ${subject['at_risk_rate']}%'),
-                                    Text('Top Grade: ${subject['top_grade']}'),
-                                  ],
-                                ),
+                        child: Container(
+                          width: double.infinity,
+                          //scrollDirection: Axis.horizontal,
+                          child: SingleChildScrollView(
+                            child: DataTable(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+                                ],
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            ElevatedButton(
-                              onPressed: currentPage > 1 && !isLoading
-                                  ? () => fetchAnalyticsData(page: currentPage - 1)
-                                  : null,
-                              child: Text('Previous'),
+                              columns: const [
+                                DataColumn(label: Text('Subject Code')),
+                                DataColumn(label: Text('Description')),
+                                DataColumn(label: Text('Average Grade')),
+                                DataColumn(label: Text('Passing Rate Percentage')),
+                                DataColumn(label: Text('At-Risk Rate Percentage')),
+                                DataColumn(label: Text('Top Grade')),
+                              ],
+                              rows: subjects.map<DataRow>((subject) {
+                                return DataRow(
+                                  cells: [
+                                    DataCell(Text(subject['subject_code'].toString())),
+                                    DataCell(Text(subject['subject_description'].toString())),
+                                    DataCell(Text('${subject['average_grade']}%')),
+                                    DataCell(Text('${subject['passing_rate']}%')),
+                                    DataCell(Text('${subject['at_risk_rate']}%')),
+                                    DataCell(Text(subject['top_grade'].toString())),
+                                  ],
+                                );
+                              }).toList(),
                             ),
-                            Text('Page $currentPage', style: TextStyle(fontSize: 12)),
-                            ElevatedButton(
-                              onPressed: hasMore && !isLoading
-                                  ? () => fetchAnalyticsData(page: currentPage + 1)
-                                  : null,
-                              child: Text('Next'),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ],
