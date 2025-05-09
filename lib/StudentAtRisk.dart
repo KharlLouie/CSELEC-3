@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'host_info.dart';
 
 class StudentRiskAnalyticsPage extends StatefulWidget {
   @override
@@ -34,7 +35,7 @@ class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> {
         if (selectedSemesterId != null) 'semester_id': selectedSemesterId.toString(),
       };
 
-      final uri = Uri.http('127.0.0.1:5000', '/students/at_risk', queryParameters);
+      final uri = Uri.http(apiBaseUrl, '/students/at_risk', queryParameters);
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {
@@ -149,7 +150,7 @@ class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> {
                           DataCell(
                             riskFactors.isNotEmpty
                               ? SizedBox(
-                                  height: 80, // Set your preferred max height here
+                                  height: 500, // Set your preferred max height here
                                   child: SingleChildScrollView(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,

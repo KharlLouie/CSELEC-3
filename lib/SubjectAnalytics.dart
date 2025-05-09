@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'host_info.dart';
 
 class SubjectAnalyticsPage extends StatefulWidget {
   @override
@@ -35,7 +36,7 @@ class _SubjectAnalyticsPageState extends State<SubjectAnalyticsPage> {
         'page': page.toString(),
       };
 
-      final uri = Uri.http('127.0.0.1:5000', '/subjects/analytics', queryParameters);
+      final uri = Uri.http(apiBaseUrl, '/subjects/analytics', queryParameters);
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {

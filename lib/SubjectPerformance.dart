@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'host_info.dart';
 
 class StudentPerformancePage extends StatefulWidget {
   @override
@@ -51,7 +52,7 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
         query['semester_id'] = selectedSemesterId.toString();
       }
 
-      final uri = Uri.http('127.0.0.1:5000', path, query.isNotEmpty ? query : null);
+      final uri = Uri.http(apiBaseUrl, path, query.isNotEmpty ? query : null);
       final resp = await http.get(uri);
 
       if (resp.statusCode != 200) {

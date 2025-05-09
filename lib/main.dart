@@ -1,11 +1,25 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:finals/StudentAtRisk.dart';
 import 'package:finals/SubjectAnalytics.dart';
 import 'package:finals/SubjectPerformance.dart';
+import 'package:window_manager/window_manager.dart';
+import 'host_info.dart';
 
-void main() => runApp(StudentDashboardApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  
+  // Initialize window manager
+  await windowManager.ensureInitialized();
+  
+  // Set window to maximized
+  await windowManager.maximize();
+  
+  runApp(StudentDashboardApp());
+}
 
 class StudentDashboardApp extends StatelessWidget {
   const StudentDashboardApp({super.key});
@@ -29,6 +43,7 @@ class StudentDashboard extends StatefulWidget {
 class _StudentDashboardState extends State<StudentDashboard> with SingleTickerProviderStateMixin {
   final Color primaryColor = Color(0xFF5A67D8);
   final Color backgroundColor = Color(0xFFF7FAFC);
+  final TextEditingController _urlController = TextEditingController();
 
   late AnimationController _controller;
   late Animation<Offset> _slideAnimation;
@@ -66,6 +81,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   @override
   void initState() {
     super.initState();
+    _urlController.text = apiBaseUrl;  // Initialize with current URL
 
     _controller = AnimationController(
       duration: Duration(milliseconds: 600),
@@ -86,7 +102,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   }
 
   Future<void> fetchSchoolYears() async {
-    final url = Uri.parse('http://127.0.0.1:5000/home/');
+    final url = Uri.parse('http://$apiBaseUrl/home/');
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
@@ -103,7 +119,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   Future<void> fetchSemesterData() async {
     if (selectedSchoolYear == null) return;
 
-    final url = Uri.parse('http://127.0.0.1:5000/home/?sy=$selectedSchoolYear');
+    final url = Uri.parse('http://$apiBaseUrl/home/?sy=$selectedSchoolYear');
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
@@ -148,6 +164,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   @override
   void dispose() {
     _controller.dispose();
+    _urlController.dispose();  // Dispose the controller
     super.dispose();
   }
 
@@ -230,7 +247,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                                   style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
                               SizedBox(height: 8),
                               Container(
-                                width: 1200,
+                                width: double.infinity,
                                 padding: EdgeInsets.symmetric(horizontal: 16),
                                 decoration: BoxDecoration(
                                   color: Colors.white,
@@ -278,7 +295,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                                     DataColumn(label: Text('First Semester', style: TextStyle(fontWeight: FontWeight.bold))),
                                     DataColumn(label: Text('Second Semester', style: TextStyle(fontWeight: FontWeight.bold))),
                                     DataColumn(label: Text('Summer Semester', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Change (First and Second Semester)', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    DataColumn(label: Text('Change (1st and 2nd Semester)', style: TextStyle(fontWeight: FontWeight.bold))),
                                   ],
                                   rows: [
                                     DataRow(cells: [
@@ -313,6 +330,62 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                                 ),
                               ),
                               SizedBox(height: 30),
+                              
+                              // URL Input Field
+                              Container(
+                                width: double.infinity,
+                                padding: EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Host Address',
+                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                    SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _urlController,
+                                            decoration: InputDecoration(
+                                              hintText: 'Enter Host Address and Port (ex. 127.0.0.1:5000)',
+                                              border: OutlineInputBorder(
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: 8),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              apiBaseUrl = _urlController.text;
+                                            });
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Address updated successfully'),
+                                                duration: Duration(seconds: 2),
+                                              ),
+                                            );
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: primaryColor,
+                                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                          ),
+                                          child: Text('Update Address' , style: TextStyle(color: Colors.white)),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),
