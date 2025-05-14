@@ -7,17 +7,18 @@ import 'package:finals/SubjectAnalytics.dart';
 import 'package:finals/SubjectPerformance.dart';
 import 'package:finals/ModifyData.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'host_info.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   
-  // Initialize window manager
-  await windowManager.ensureInitialized();
-  
-  // Set window to maximized
-  await windowManager.maximize();
+  // Initialize window manager only on desktop platforms
+  if (!kIsWeb) {
+    await windowManager.ensureInitialized();
+    await windowManager.maximize();
+  }
   
   runApp(StudentDashboardApp());
 }
@@ -103,7 +104,9 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   }
 
   Future<void> fetchSchoolYears() async {
-    final url = Uri.parse('http://$apiBaseUrl/home/');
+    final url = Uri.parse(
+      apiBaseUrl.startsWith('http') ? '$apiBaseUrl/home/' : 'http://$apiBaseUrl/home/'
+    );
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
@@ -120,7 +123,9 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   Future<void> fetchSemesterData() async {
     if (selectedSchoolYear == null) return;
 
-    final url = Uri.parse('http://$apiBaseUrl/home/?sy=$selectedSchoolYear');
+    final url = Uri.parse(
+      apiBaseUrl.startsWith('http') ? '$apiBaseUrl/home/?sy=$selectedSchoolYear' : 'http://$apiBaseUrl/home/?sy=$selectedSchoolYear'
+    );
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
@@ -283,53 +288,56 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
                               SizedBox(height: 60),
 
                               // Table for metrics
-                              Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
-                                  ],
-                                ),
-                                child: DataTable(
-                                  columns: const [
-                                    DataColumn(label: Text('Metric', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('First Semester', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Second Semester', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Summer Semester', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    DataColumn(label: Text('Change (1st and 2nd Semester)', style: TextStyle(fontWeight: FontWeight.bold))),
-                                  ],
-                                  rows: [
-                                    DataRow(cells: [
-                                      const DataCell(Text('Average GPA')),
-                                      DataCell(Text(firstSemAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                      DataCell(Text(secondSemAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                      DataCell(Text(summerAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                      DataCell(Text((secondSemAverageGrade != null && firstSemAverageGrade != null) ? (secondSemAverageGrade! - firstSemAverageGrade!).toStringAsFixed(2) : 'N/A')),
-                                    ]),
-                                    DataRow(cells: [
-                                      const DataCell(Text('Passing Rate (%)')),
-                                      DataCell(_percentCell(firstSemPassingRate)),
-                                      DataCell(_percentCell(secondSemPassingRate)),
-                                      DataCell(_percentCell(summerPassingRate)),
-                                      DataCell(_percentCell((secondSemPassingRate != null && firstSemPassingRate != null) ? (secondSemPassingRate! - firstSemPassingRate!) : null)),
-                                    ]),
-                                    DataRow(cells: [
-                                      const DataCell(Text('Top Grade')),
-                                      DataCell(Text(firstSemTopGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                      DataCell(Text(secondSemTopGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                      DataCell(Text(summerTopGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                      DataCell(Text((secondSemTopGrade != null && firstSemTopGrade != null) ? (secondSemTopGrade! - firstSemTopGrade!).toStringAsFixed(2) : 'N/A')),
-                                    ]),
-                                    DataRow(cells: [
-                                      const DataCell(Text('At-Risk Students (%)')),
-                                      DataCell(_percentCell(firstSemAtRiskRate)),
-                                      DataCell(_percentCell(secondSemAtRiskRate)),
-                                      DataCell(_percentCell(summerAtRiskRate)),
-                                      DataCell(_percentCell((secondSemAtRiskRate != null && firstSemAtRiskRate != null) ? (secondSemAtRiskRate! - firstSemAtRiskRate!) : null)),
-                                    ]),
-                                  ],
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Container(
+                                  width: null,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+                                    ],
+                                  ),
+                                  child: DataTable(
+                                    columns: const [
+                                      DataColumn(label: Text('Metric', style: TextStyle(fontWeight: FontWeight.bold))),
+                                      DataColumn(label: Text('First Semester', style: TextStyle(fontWeight: FontWeight.bold))),
+                                      DataColumn(label: Text('Second Semester', style: TextStyle(fontWeight: FontWeight.bold))),
+                                      DataColumn(label: Text('Summer Semester', style: TextStyle(fontWeight: FontWeight.bold))),
+                                      DataColumn(label: Text('Change (1st and 2nd Semester)', style: TextStyle(fontWeight: FontWeight.bold))),
+                                    ],
+                                    rows: [
+                                      DataRow(cells: [
+                                        const DataCell(Text('Average GPA')),
+                                        DataCell(Text(firstSemAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                        DataCell(Text(secondSemAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                        DataCell(Text(summerAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                        DataCell(Text((secondSemAverageGrade != null && firstSemAverageGrade != null) ? (secondSemAverageGrade! - firstSemAverageGrade!).toStringAsFixed(2) : 'N/A')),
+                                      ]),
+                                      DataRow(cells: [
+                                        const DataCell(Text('Passing Rate (%)')),
+                                        DataCell(_percentCell(firstSemPassingRate)),
+                                        DataCell(_percentCell(secondSemPassingRate)),
+                                        DataCell(_percentCell(summerPassingRate)),
+                                        DataCell(_percentCell((secondSemPassingRate != null && firstSemPassingRate != null) ? (secondSemPassingRate! - firstSemPassingRate!) : null)),
+                                      ]),
+                                      DataRow(cells: [
+                                        const DataCell(Text('Top Grade')),
+                                        DataCell(Text(firstSemTopGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                        DataCell(Text(secondSemTopGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                        DataCell(Text(summerTopGrade?.toStringAsFixed(2) ?? 'N/A')),
+                                        DataCell(Text((secondSemTopGrade != null && firstSemTopGrade != null) ? (secondSemTopGrade! - firstSemTopGrade!).toStringAsFixed(2) : 'N/A')),
+                                      ]),
+                                      DataRow(cells: [
+                                        const DataCell(Text('At-Risk Students (%)')),
+                                        DataCell(_percentCell(firstSemAtRiskRate)),
+                                        DataCell(_percentCell(secondSemAtRiskRate)),
+                                        DataCell(_percentCell(summerAtRiskRate)),
+                                        DataCell(_percentCell((secondSemAtRiskRate != null && firstSemAtRiskRate != null) ? (secondSemAtRiskRate! - firstSemAtRiskRate!) : null)),
+                                      ]),
+                                    ],
+                                  ),
                                 ),
                               ),
                               SizedBox(height: 30),
