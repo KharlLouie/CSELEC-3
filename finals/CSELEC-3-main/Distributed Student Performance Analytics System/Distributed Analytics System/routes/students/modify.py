@@ -250,3 +250,168 @@ def update_grade():
     except Exception as e:
         print(f"Exception: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@modify_bp.route('/batch-update-grades', methods=['POST'])
+def batch_update_grades():
+    try:
+        data = request.get_json()
+        if not data or not isinstance(data, list):
+            return jsonify({"error": "Expected a list of grade updates"}), 400
+
+        # Validate all updates first
+        validated_updates = []
+        for update in data:
+            if not all(k in update for k in ['student_id', 'subject_code', 'semester_id', 'new_grade']):
+                return jsonify({"error": f"Missing required fields in update: {update}"}), 400
+            
+            try:
+                validated_update = {
+                    'student_id': int(update['student_id']),
+                    'subject_code': str(update['subject_code']),
+                    'semester_id': int(update['semester_id']),
+                    'new_grade': int(float(update['new_grade']))
+                }
+                
+                if not (0 <= validated_update['new_grade'] <= 100):
+                    return jsonify({"error": f"Grade must be between 0 and 100 for update: {update}"}), 400
+                    
+                validated_updates.append(validated_update)
+            except (ValueError, TypeError) as e:
+                return jsonify({"error": f"Invalid data format in update: {update}. Error: {str(e)}"}), 400
+
+        db = get_db()
+        results = []
+        errors = []
+
+        # Group updates by student and semester for efficient processing
+        updates_by_student_semester = {}
+        for update in validated_updates:
+            key = (update['student_id'], update['semester_id'])
+            if key not in updates_by_student_semester:
+                updates_by_student_semester[key] = []
+            updates_by_student_semester[key].append(update)
+
+        # Process each student-semester group
+        for (student_id, semester_id), updates in updates_by_student_semester.items():
+            try:
+                # Get grades document for this student and semester
+                grades_doc = db.grades.find_one({
+                    "StudentID": student_id,
+                    "SemesterID": semester_id
+                })
+
+                if not grades_doc:
+                    errors.append({
+                        "student_id": student_id,
+                        "semester_id": semester_id,
+                        "error": "No grades found for this student and semester"
+                    })
+                    continue
+
+                # Create a new grades array with all updates
+                new_grades = grades_doc['Grades'].copy()
+                subject_updates = {}  # Track which subjects were updated
+
+                for update in updates:
+                    try:
+                        subject_index = grades_doc['SubjectCodes'].index(update['subject_code'])
+                        new_grades[subject_index] = update['new_grade']
+                        subject_updates[update['subject_code']] = update['new_grade']
+                    except ValueError:
+                        errors.append({
+                            "student_id": student_id,
+                            "subject_code": update['subject_code'],
+                            "error": "Subject not found in grades document"
+                        })
+                        continue
+
+                # Update the grades document
+                result = db.grades.update_one(
+                    {
+                        "StudentID": student_id,
+                        "SemesterID": semester_id
+                    },
+                    {
+                        "$set": {
+                            "Grades": new_grades,
+                            "updated_at": datetime.now()
+                        }
+                    }
+                )
+
+                if result.modified_count > 0:
+                    # Get subjects information for weighted average calculation
+                    subjects = list(db.subjects.find(
+                        {"_id": {"$in": grades_doc['SubjectCodes']}},
+                        {"_id": 1, "Units": 1}
+                    ))
+
+                    # Calculate weighted average
+                    total_units = 0
+                    total_weighted_grade = 0
+                    for i, grade in enumerate(new_grades):
+                        subject = next((s for s in subjects if s['_id'] == grades_doc['SubjectCodes'][i]), None)
+                        if subject:
+                            units = subject.get('Units', 3)
+                            total_units += units
+                            total_weighted_grade += grade * units
+
+                    weighted_avg = total_weighted_grade / total_units if total_units > 0 else 0
+                    gpa = convert_grade_to_gpa(weighted_avg)
+
+                    # Update student averages and GPA
+                    db.student_averages.update_one(
+                        {"student_id": student_id},
+                        {
+                            "$set": {
+                                "weighted_average": weighted_avg,
+                                "updated_at": datetime.now()
+                            }
+                        },
+                        upsert=True
+                    )
+
+                    db.student_gpas.update_one(
+                        {"student_id": student_id},
+                        {
+                            "$set": {
+                                "weighted_average": weighted_avg,
+                                "gpa": gpa,
+                                "updated_at": datetime.now()
+                            }
+                        },
+                        upsert=True
+                    )
+
+                    # Update class averages for modified subjects
+                    for subject_code in subject_updates:
+                        update_class_average_for_subject_semester(subject_code, semester_id)
+
+                    results.append({
+                        "student_id": student_id,
+                        "semester_id": semester_id,
+                        "updated_subjects": list(subject_updates.keys()),
+                        "weighted_average": weighted_avg,
+                        "gpa": gpa
+                    })
+
+            except Exception as e:
+                errors.append({
+                    "student_id": student_id,
+                    "semester_id": semester_id,
+                    "error": str(e)
+                })
+
+        # Clear all caches after batch update
+        if not clear_all_caches():
+            print("Warning: Cache clearing may have failed")
+
+        return jsonify({
+            "message": "Batch update completed",
+            "successful_updates": results,
+            "errors": errors
+        })
+
+    except Exception as e:
+        print(f"Batch update error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
