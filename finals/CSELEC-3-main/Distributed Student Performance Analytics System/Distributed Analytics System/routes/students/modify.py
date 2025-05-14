@@ -9,6 +9,7 @@ from utils.class_average_updater import update_class_average_for_subject_semeste
 from routes.students.at_risk import get_at_risk_students
 from routes.students.subjects import get_subjects
 from routes.sy_comprep import school_year_summary
+from cache_config import clear_all_caches
 
 modify_bp = Blueprint('modify', __name__)
 
@@ -232,51 +233,10 @@ def update_grade():
         # Update class averages for the modified subject
         update_class_average_for_subject_semester(subject_code, semester_id)
 
-        # Clear all relevant caches
-        print("Clearing caches...")
+        # After updating grades, clear all caches
+        if not clear_all_caches():
+            print("Warning: Cache clearing may have failed")
         
-        # Clear student performance caches
-        semesters = fetch_all_semesters()
-        
-        # Clear individual student performance cache
-        for semester in semesters:
-            # Clear with all possible query parameters
-            cache.delete_memoized(get_performance, student_id, semester_id=semester['id'])
-            cache.delete_memoized(get_performance, student_id)  # Clear without semester_id
-        
-        # Clear subjects cache for this student
-        cache.delete_memoized(get_subjects, student_id)
-        
-        # Clear all students performance cache
-        for page in range(1, 11):  # Assuming max 10 pages
-            cache.delete_memoized(get_all_student_performance, page=page)
-            cache.delete_memoized(get_all_student_performance)  # Clear without page
-        
-        # Clear at-risk students cache
-        for page in range(1, 11):
-            # Clear with semester filter
-            for semester in semesters:
-                cache.delete_memoized(get_at_risk_students, page=page, semester_id=semester['id'])
-                cache.delete_memoized(get_at_risk_students, page=page)  # Clear without semester
-            # Clear without page parameter
-            cache.delete_memoized(get_at_risk_students)
-        
-        # Clear school year comparison cache
-        # Get all school years from semesters
-        school_years = sorted(set(s['SchoolYear'] for s in semesters))
-        for sy in school_years:
-            cache.delete_memoized(school_year_summary, sy=sy)
-        cache.delete_memoized(school_year_summary)  # Clear without school year
-        
-        # Force clear all caches for these routes
-        cache.delete_memoized(get_performance)
-        cache.delete_memoized(get_all_student_performance)
-        cache.delete_memoized(get_at_risk_students)
-        cache.delete_memoized(get_subjects)
-        cache.delete_memoized(school_year_summary)
-        
-        print("Cache clearing completed")
-
         return jsonify({
             "message": "Grade updated successfully",
             "new_grade": new_grade,
