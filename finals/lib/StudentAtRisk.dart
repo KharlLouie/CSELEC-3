@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'host_info.dart';
+import 'package:flutter/rendering.dart';
 
 class StudentRiskAnalyticsPage extends StatefulWidget {
   @override
@@ -9,7 +10,7 @@ class StudentRiskAnalyticsPage extends StatefulWidget {
       _StudentRiskAnalyticsPageState();
 }
 
-class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> {
+class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> with AutomaticKeepAliveClientMixin {
   List<dynamic> semesters = [];
   List<dynamic> students = [];
   int? selectedSemesterId;
@@ -19,6 +20,9 @@ class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> {
   final TextEditingController studentIdController = TextEditingController();
 
   @override
+  bool get wantKeepAlive => false;
+
+  @override
   void initState() {
     super.initState();
     fetchAnalyticsData();
@@ -26,8 +30,23 @@ class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> {
 
   @override
   void dispose() {
+    // Clear cache when leaving the page
+    _clearCache();
     studentIdController.dispose();
     super.dispose();
+  }
+
+  Future<void> _clearCache() async {
+    try {
+      final uri = Uri.http(apiBaseUrl, '/students/at_risk');
+      await http.post(
+        uri,
+        headers: {'Cache-Control': 'no-cache'},
+        body: json.encode({'timestamp': DateTime.now().millisecondsSinceEpoch.toString()}),
+      );
+    } catch (e) {
+      print('Error clearing cache: $e');
+    }
   }
 
   Future<void> fetchAnalyticsData() async {
@@ -50,7 +69,7 @@ class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> {
         setState(() {
           semesters = data['semesters'];
           students = data['data'];
-          hasMoreData = data['data'].isNotEmpty; // Check if there are more pages
+          hasMoreData = data['data'].isNotEmpty;
         });
       } else {
         throw Exception('Failed to load analytics');
@@ -183,7 +202,7 @@ class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Student not found in the current semester')),
+          SnackBar(content: Text('Student Does not have any Failing Grades in the current semester')),
         );
       }
     } catch (e) {

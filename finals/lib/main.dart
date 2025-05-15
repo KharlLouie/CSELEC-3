@@ -7,18 +7,17 @@ import 'package:finals/SubjectAnalytics.dart';
 import 'package:finals/SubjectPerformance.dart';
 import 'package:finals/ModifyData.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'host_info.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   
-  // Initialize window manager only on desktop platforms
-  if (!kIsWeb) {
-    await windowManager.ensureInitialized();
-    await windowManager.maximize();
-  }
+  // Initialize window manager
+  await windowManager.ensureInitialized();
+  
+  // Set window to maximized
+  await windowManager.maximize();
   
   runApp(StudentDashboardApp());
 }
@@ -42,16 +41,10 @@ class StudentDashboard extends StatefulWidget {
   _StudentDashboardState createState() => _StudentDashboardState();
 }
 
-class _StudentDashboardState extends State<StudentDashboard> with SingleTickerProviderStateMixin {
+class _StudentDashboardState extends State<StudentDashboard> with AutomaticKeepAliveClientMixin {
   final Color primaryColor = Color(0xFF5A67D8);
   final Color backgroundColor = Color(0xFFF7FAFC);
   final TextEditingController _urlController = TextEditingController();
-
-  late AnimationController _controller;
-  late Animation<Offset> _slideAnimation;
-  late Animation<Offset> _contentSlideAnimation;
-
-  bool isSidebarOpen = false; // Track sidebar state
 
   int? selectedSchoolYear;
   String? selectedSemester;
@@ -81,34 +74,31 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   double? summerTopGrade;
 
   @override
+  bool get wantKeepAlive => false;
+
+  @override
   void initState() {
     super.initState();
-    _urlController.text = apiBaseUrl;  // Initialize with current URL
-
-    _controller = AnimationController(
-      duration: Duration(milliseconds: 600),
-      vsync: this,
-    );
-
-    _slideAnimation = Tween<Offset>(begin: Offset(-1.0, 0.0), end: Offset.zero).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ));
-
-    _contentSlideAnimation = Tween<Offset>(begin: Offset(1.1, 0.0), end: Offset.zero).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ));
-
+    _urlController.text = apiBaseUrl;
     fetchSchoolYears();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    fetchSchoolYears();
+    if (selectedSchoolYear != null) {
+      fetchSemesterData();
+    }
+  }
+
   Future<void> fetchSchoolYears() async {
-    final url = Uri.parse(
-      apiBaseUrl.startsWith('http') ? '$apiBaseUrl/home/' : 'http://$apiBaseUrl/home/'
-    );
+    final url = Uri.parse('http://$apiBaseUrl/home/');
     try {
-      final response = await http.get(url);
+      final response = await http.get(
+        url,
+        headers: {'Cache-Control': 'no-cache'},
+      );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
@@ -123,11 +113,12 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   Future<void> fetchSemesterData() async {
     if (selectedSchoolYear == null) return;
 
-    final url = Uri.parse(
-      apiBaseUrl.startsWith('http') ? '$apiBaseUrl/home/?sy=$selectedSchoolYear' : 'http://$apiBaseUrl/home/?sy=$selectedSchoolYear'
-    );
+    final url = Uri.parse('http://$apiBaseUrl/home/?sy=$selectedSchoolYear&timestamp=${DateTime.now().millisecondsSinceEpoch}');
     try {
-      final response = await http.get(url);
+      final response = await http.get(
+        url,
+        headers: {'Cache-Control': 'no-cache'},
+      );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List semestersData = data['semesters'];
@@ -169,8 +160,7 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
 
   @override
   void dispose() {
-    _controller.dispose();
-    _urlController.dispose();  // Dispose the controller
+    _urlController.dispose();
     super.dispose();
   }
 
@@ -178,253 +168,176 @@ class _StudentDashboardState extends State<StudentDashboard> with SingleTickerPr
   Widget build(BuildContext context) {
     List<int> displayedSchoolYears = schoolYears.isNotEmpty
         ? schoolYears
-        : [2020, 2021, 2022, 2023, 2024]; // Fallback if Flask offline
+        : [2020, 2021, 2022, 2023, 2024];
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: Stack(
+      body: Row(
         children: [
-          // Slide all content together
-          SlideTransition(
-            position: _slideAnimation,
-            child: Row(
+          // Static Sidebar
+          Container(
+            width: 250,
+            color: primaryColor,
+            padding: EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Sidebar
-                Container(
-                  width: 250,
-                  color: primaryColor,
-                  padding: EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(height: 90),
-                      Text(
-                        'Commands',
-                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 20),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => StudentPerformancePage()));
-                        },
-                        child: Text('Fetch Student Performance', style: TextStyle(color: Colors.white)),
-                      ),
-                      SizedBox(height: 10),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => StudentRiskAnalyticsPage()));
-                        },
-                        child: Text('Fetch At-Risk Students', style: TextStyle(color: Colors.white)),
-                      ),
-                      SizedBox(height: 10),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => SubjectAnalyticsPage()));
-                        },
-                        child: Text('Fetch Subject Analytics', style: TextStyle(color: Colors.white)),
-                      ),
-                      SizedBox(height: 10),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => ModifyDataPage()));
-                        },
-                        child: Text('Modify Data', style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                  ),
+                SizedBox(height: 90),
+                Text(
+                  'Commands',
+                  style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                 ),
-
-                // Slide content separately for subtle animation effect
-                Expanded(
-                  child: SlideTransition(
-                    position: _contentSlideAnimation,
-                    child: Stack(
-                      children: [
-                        // Background content
-                        Padding(
-                          padding: const EdgeInsets.all(24.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Performance Dashboard',
-                                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87)),
-                              SizedBox(height: 20),
-
-                              // School Year Dropdown
-                              Text('School Year:',
-                                  style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
-                              SizedBox(height: 8),
-                              Container(
-                                width: double.infinity,
-                                padding: EdgeInsets.symmetric(horizontal: 16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
-                                  ],
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<int>(
-                                    value: selectedSchoolYear,
-                                    hint: Text("Select School Year"),
-                                    onChanged: (value) {
-                                      setState(() {
-                                        selectedSchoolYear = value;
-                                        selectedSemester = null;
-                                      });
-                                      fetchSemesterData();
-                                    },
-                                    items: displayedSchoolYears.map((year) {
-                                      return DropdownMenuItem<int>(
-                                        value: year,
-                                        child: Text(year.toString()),
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              ),
-
-                              SizedBox(height: 60),
-
-                              // Table for metrics
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Container(
-                                  width: null,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: [
-                                      BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
-                                    ],
-                                  ),
-                                  child: DataTable(
-                                    columns: const [
-                                      DataColumn(label: Text('Metric', style: TextStyle(fontWeight: FontWeight.bold))),
-                                      DataColumn(label: Text('First Semester', style: TextStyle(fontWeight: FontWeight.bold))),
-                                      DataColumn(label: Text('Second Semester', style: TextStyle(fontWeight: FontWeight.bold))),
-                                      DataColumn(label: Text('Summer Semester', style: TextStyle(fontWeight: FontWeight.bold))),
-                                      DataColumn(label: Text('Change (1st and 2nd Semester)', style: TextStyle(fontWeight: FontWeight.bold))),
-                                    ],
-                                    rows: [
-                                      DataRow(cells: [
-                                        const DataCell(Text('Average GPA')),
-                                        DataCell(Text(firstSemAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                        DataCell(Text(secondSemAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                        DataCell(Text(summerAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                        DataCell(Text((secondSemAverageGrade != null && firstSemAverageGrade != null) ? (secondSemAverageGrade! - firstSemAverageGrade!).toStringAsFixed(2) : 'N/A')),
-                                      ]),
-                                      DataRow(cells: [
-                                        const DataCell(Text('Passing Rate (%)')),
-                                        DataCell(_percentCell(firstSemPassingRate)),
-                                        DataCell(_percentCell(secondSemPassingRate)),
-                                        DataCell(_percentCell(summerPassingRate)),
-                                        DataCell(_percentCell((secondSemPassingRate != null && firstSemPassingRate != null) ? (secondSemPassingRate! - firstSemPassingRate!) : null)),
-                                      ]),
-                                      DataRow(cells: [
-                                        const DataCell(Text('Top Grade')),
-                                        DataCell(Text(firstSemTopGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                        DataCell(Text(secondSemTopGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                        DataCell(Text(summerTopGrade?.toStringAsFixed(2) ?? 'N/A')),
-                                        DataCell(Text((secondSemTopGrade != null && firstSemTopGrade != null) ? (secondSemTopGrade! - firstSemTopGrade!).toStringAsFixed(2) : 'N/A')),
-                                      ]),
-                                      DataRow(cells: [
-                                        const DataCell(Text('At-Risk Students (%)')),
-                                        DataCell(_percentCell(firstSemAtRiskRate)),
-                                        DataCell(_percentCell(secondSemAtRiskRate)),
-                                        DataCell(_percentCell(summerAtRiskRate)),
-                                        DataCell(_percentCell((secondSemAtRiskRate != null && firstSemAtRiskRate != null) ? (secondSemAtRiskRate! - firstSemAtRiskRate!) : null)),
-                                      ]),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              SizedBox(height: 30),
-                              
-                              /*
-                              // URL Input Field
-                              Container(
-                                width: double.infinity,
-                                padding: EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Host Address (Developer Test)',
-                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                    SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: TextField(
-                                            controller: _urlController,
-                                            decoration: InputDecoration(
-                                              hintText: 'Enter Host Address and Port (ex. 127.0.0.1:5000)',
-                                              border: OutlineInputBorder(
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(width: 8),
-                                        ElevatedButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              apiBaseUrl = _urlController.text;
-                                            });
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text('Address updated successfully'),
-                                                duration: Duration(seconds: 2),
-                                              ),
-                                            );
-                                          },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: primaryColor,
-                                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                          ),
-                                          child: Text('Update Address' , style: TextStyle(color: Colors.white)),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ), 
-                              ),*/
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                SizedBox(height: 20),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => StudentPerformancePage()));
+                  },
+                  child: Text('Fetch Student Performance', style: TextStyle(color: Colors.white)),
+                ),
+                SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => StudentRiskAnalyticsPage()));
+                  },
+                  child: Text('Fetch At-Risk Students', style: TextStyle(color: Colors.white)),
+                ),
+                SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => SubjectAnalyticsPage()));
+                  },
+                  child: Text('Fetch Subject Analytics', style: TextStyle(color: Colors.white)),
+                ),
+                SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => ModifyDataPage()));
+                  },
+                  child: Text('Modify Data', style: TextStyle(color: Colors.white)),
                 ),
               ],
             ),
           ),
 
-          // Burger button always visible
-          Positioned(
-            top: 40,
-            left: 20,
-            child: IconButton(
-              icon: Icon(Icons.menu, color: Colors.black, size: 40),
-              onPressed: () {
-                setState(() {
-                  if (isSidebarOpen) {
-                    _controller.reverse(); // Close sidebar
-                  } else {
-                    _controller.forward(); // Open sidebar
-                  }
-                  isSidebarOpen = !isSidebarOpen; // Toggle the sidebar state
-                });
-              },
+          // Main Content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Performance Dashboard',
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  SizedBox(height: 20),
+
+                  // School Year Dropdown
+                  Text('Select School Year:',
+                      style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(height: 8),
+                        Container(
+                          height: 100, // Fixed height to show 2 items
+                          child: ListView.builder(
+                            itemCount: displayedSchoolYears.length,
+                            itemBuilder: (context, index) {
+                              final year = displayedSchoolYears[index];
+                              return MouseRegion(
+                                onEnter: (_) {
+                                  setState(() {
+                                    selectedSchoolYear = year;
+                                    selectedSemester = null;
+                                  });
+                                  fetchSemesterData();
+                                },
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: selectedSchoolYear == year ? primaryColor.withOpacity(0.1) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    year.toString(),
+                                    style: TextStyle(
+                                      color: selectedSchoolYear == year ? primaryColor : Colors.black87,
+                                      fontWeight: selectedSchoolYear == year ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: 60),
+
+                  // Table for metrics
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+                      ],
+                    ),
+                    child: DataTable(
+                      columns: const [
+                        DataColumn(label: Text('Metric', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('First Semester', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Second Semester', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Summer Semester', style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text('Change (1st and 2nd Semester)', style: TextStyle(fontWeight: FontWeight.bold))),
+                      ],
+                      rows: [
+                        DataRow(cells: [
+                          const DataCell(Text('Average GPA')),
+                          DataCell(Text(firstSemAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
+                          DataCell(Text(secondSemAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
+                          DataCell(Text(summerAverageGrade?.toStringAsFixed(2) ?? 'N/A')),
+                          DataCell(Text((secondSemAverageGrade != null && firstSemAverageGrade != null) ? (secondSemAverageGrade! - firstSemAverageGrade!).toStringAsFixed(2) : 'N/A')),
+                        ]),
+                        DataRow(cells: [
+                          const DataCell(Text('Passing Rate (%)')),
+                          DataCell(_percentCell(firstSemPassingRate)),
+                          DataCell(_percentCell(secondSemPassingRate)),
+                          DataCell(_percentCell(summerPassingRate)),
+                          DataCell(_percentCell((secondSemPassingRate != null && firstSemPassingRate != null) ? (secondSemPassingRate! - firstSemPassingRate!) : null)),
+                        ]),
+                        DataRow(cells: [
+                          const DataCell(Text('Top Grade')),
+                          DataCell(Text(firstSemTopGrade?.toStringAsFixed(2) ?? 'N/A')),
+                          DataCell(Text(secondSemTopGrade?.toStringAsFixed(2) ?? 'N/A')),
+                          DataCell(Text(summerTopGrade?.toStringAsFixed(2) ?? 'N/A')),
+                          DataCell(Text((secondSemTopGrade != null && firstSemTopGrade != null) ? (secondSemTopGrade! - firstSemTopGrade!).toStringAsFixed(2) : 'N/A')),
+                        ]),
+                        DataRow(cells: [
+                          const DataCell(Text('At-Risk Students (%)')),
+                          DataCell(_percentCell(firstSemAtRiskRate)),
+                          DataCell(_percentCell(secondSemAtRiskRate)),
+                          DataCell(_percentCell(summerAtRiskRate)),
+                          DataCell(_percentCell((secondSemAtRiskRate != null && firstSemAtRiskRate != null) ? (secondSemAtRiskRate! - firstSemAtRiskRate!) : null)),
+                        ]),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

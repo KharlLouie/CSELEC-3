@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'host_info.dart';
+import 'package:flutter/rendering.dart';
 
 class ModifyDataPage extends StatefulWidget {
   const ModifyDataPage({super.key});
@@ -10,10 +11,11 @@ class ModifyDataPage extends StatefulWidget {
   State<ModifyDataPage> createState() => _ModifyDataPageState();
 }
 
-class _ModifyDataPageState extends State<ModifyDataPage> {
+class _ModifyDataPageState extends State<ModifyDataPage> with AutomaticKeepAliveClientMixin {
   final Color primaryColor = Color(0xFF5A67D8);
   final _studentIdController = TextEditingController();
   final _gradeController = TextEditingController();
+  final _emailController = TextEditingController();
   
   List<dynamic> students = [];
   List<dynamic> semesters = [];
@@ -31,9 +33,82 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
   List<Map<String, dynamic>> _batchUpdates = [];
 
   @override
+  bool get wantKeepAlive => false; // This ensures the page refreshes when revisited
+
+  @override
   void initState() {
     super.initState();
     _fetchAllStudents();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh data when page is revisited
+    _fetchAllStudents();
+  }
+
+  Future<void> _clearCache() async {
+    try {
+      // Add a small delay to ensure backend cache is cleared
+      await Future.delayed(Duration(milliseconds: 100));
+      
+      // Refresh the current view with cache-busting timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+      
+      if (studentId != null) {
+        // Refresh student data
+        final studentUri = Uri.http(
+          apiBaseUrl,
+          '/students/performance/$studentId',
+          {
+            if (selectedSemesterId != null) 'semester_id': selectedSemesterId.toString(),
+            'timestamp': timestamp,
+          },
+        );
+        final studentResp = await http.get(
+          studentUri,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          },
+        );
+        if (studentResp.statusCode == 200) {
+          final studentData = json.decode(studentResp.body);
+          setState(() {
+            subjects = studentData['subjects'] as List<dynamic>;
+          });
+        }
+      } else {
+        // Refresh all students list
+        final allStudentsUri = Uri.http(
+          apiBaseUrl,
+          '/students/performance/all',
+          {
+            'page': page.toString(),
+            'limit': limit.toString(),
+            'timestamp': timestamp,
+          },
+        );
+        final allStudentsResp = await http.get(
+          allStudentsUri,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          },
+        );
+        if (allStudentsResp.statusCode == 200) {
+          final allStudentsData = json.decode(allStudentsResp.body);
+          setState(() {
+            students = allStudentsData['students'] as List<dynamic>;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error refreshing data: $e');
+    }
   }
 
   Future<void> _fetchAllStudents() async {
@@ -82,12 +157,11 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
     });
 
     try {
-      final Map<String, String> query = {};
-      if (selectedSemesterId != null) {
-        query['semester_id'] = selectedSemesterId.toString();
-      }
+      final Map<String, String> query = {
+        if (selectedSemesterId != null) 'semester_id': selectedSemesterId.toString(),
+      };
 
-      final uri = Uri.http(apiBaseUrl, '/students/performance/$studentId', query.isNotEmpty ? query : null);
+      final uri = Uri.http(apiBaseUrl, '/students/performance/$studentId', query);
       final resp = await http.get(uri);
 
       if (resp.statusCode != 200) {
@@ -165,14 +239,12 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
   void _optimisticallyUpdateGrade(Map<String, dynamic> subject, double newGrade) {
     final key = '${subject['subject_code']}_${selectedSemesterId}';
     setState(() {
-      // Store the original grade for rollback
       _pendingUpdates[key] = {
         'original_grade': subject['grade'],
         'new_grade': newGrade,
         'subject': subject,
       };
       
-      // Update the UI immediately
       final subjectIndex = subjects.indexWhere((s) => s['subject_code'] == subject['subject_code']);
       if (subjectIndex != -1) {
         subjects[subjectIndex] = {
@@ -223,11 +295,9 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
       final responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {
-        // Handle successful updates
         final successfulUpdates = responseData['successful_updates'] as List;
         final errors = responseData['errors'] as List;
 
-        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Successfully updated ${successfulUpdates.length} grades. ${errors.length} errors.'),
@@ -235,7 +305,6 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
           ),
         );
 
-        // Clear pending updates for successful changes
         for (var update in successfulUpdates) {
           for (var subjectCode in update['updated_subjects']) {
             final key = '${subjectCode}_${update['semester_id']}';
@@ -243,17 +312,14 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
           }
         }
 
-        // Rollback failed updates
         for (var error in errors) {
           final key = '${error['subject_code']}_${error['semester_id']}';
           _rollbackOptimisticUpdate(key);
         }
 
-        // Refresh data
         await _fetchStudentData();
         await _fetchAllStudents();
       } else {
-        // Handle error
         final error = responseData['error'] ?? 'Failed to update grades';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -262,7 +328,6 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
           ),
         );
 
-        // Rollback all optimistic updates
         for (var key in _pendingUpdates.keys.toList()) {
           _rollbackOptimisticUpdate(key);
         }
@@ -276,7 +341,6 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
         ),
       );
 
-      // Rollback all optimistic updates
       for (var key in _pendingUpdates.keys.toList()) {
         _rollbackOptimisticUpdate(key);
       }
@@ -288,9 +352,9 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
     }
   }
 
-  // Modify the existing _showEditGradeDialog method
   void _showEditGradeDialog(Map<String, dynamic> subject) {
     _gradeController.text = subject['grade'].toString();
+    _emailController.text = '';
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -313,6 +377,16 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
                 ),
                 keyboardType: TextInputType.number,
               ),
+              SizedBox(height: 16),
+              TextField(
+                controller: _emailController,
+                decoration: InputDecoration(
+                  labelText: 'Email Address',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.email),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
             ],
           ),
           actions: [
@@ -331,6 +405,21 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
                     return;
                   }
 
+                  final email = _emailController.text.trim();
+                  if (email.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Email address is required')),
+                    );
+                    return;
+                  }
+                  
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Please enter a valid email address')),
+                    );
+                    return;
+                  }
+
                   Navigator.of(context).pop();
 
                   // Apply optimistic update
@@ -342,6 +431,7 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
                     'subject_code': subject['subject_code'],
                     'semester_id': selectedSemesterId,
                     'new_grade': newGrade,
+                    'email': email,
                   });
 
                   // Process batch updates if not already updating
@@ -391,152 +481,154 @@ class _ModifyDataPageState extends State<ModifyDataPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Modify Student Data'),
-        backgroundColor: primaryColor,
-      ),
-      body: Column(
-        children: [
-          // Student ID input field and fetch button
-          TextField(
-            controller: _studentIdController,
-            decoration: InputDecoration(
-              labelText: 'Enter Student ID (or leave blank to show all students)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.person),
+      appBar: AppBar(title: const Text('Modify Grade')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // Student ID input field and fetch button
+            TextField(
+              controller: _studentIdController,
+              decoration: InputDecoration(
+                labelText: 'Enter Student ID (or leave blank to show all students)',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person),
+              ),
+              keyboardType: TextInputType.number,
             ),
-            keyboardType: TextInputType.number,
-          ),
-          SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: _onFetchPressed,
-            child: Text('Fetch Data'),
-          ),
-          SizedBox(height: 16),
+            SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _onFetchPressed,
+              child: Text('Fetch Data'),
+            ),
+            SizedBox(height: 16),
 
-          if (isLoading) ...[
-            Center(child: CircularProgressIndicator()),
-          ] else if (hasError) ...[
-            Center(child: Text('Failed to load data.')),
-          ] else ...[
-            if (studentId == null) ...[
-              // Show list of students
-              Expanded(
-                child: ListView.builder(
-                  itemCount: students.length,
-                  itemBuilder: (_, i) {
-                    final s = students[i];
-                    return Card(
-                      margin: EdgeInsets.symmetric(vertical: 6),
-                      child: ListTile(
-                        title: Text(s['name']),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('GPA: ${s['overall_gpa']}'),
-                            Text('Weighted Avg: ${s['weighted_average']}'),
+            if (isLoading) ...[
+              Center(child: CircularProgressIndicator()),
+            ] else if (hasError) ...[
+              Center(child: Text('Failed to load data.')),
+            ] else ...[
+              if (studentId == null) ...[
+                // Show list of students
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: students.length,
+                    itemBuilder: (_, i) {
+                      final s = students[i];
+                      return Card(
+                        margin: EdgeInsets.symmetric(vertical: 6),
+                        child: ListTile(
+                          title: Text(s['name']),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('GPA: ${s['overall_gpa']}'),
+                              Text('Weighted Avg: ${s['weighted_average']}'),
+                            ],
+                          ),
+                          onTap: () => _onStudentTap(s),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // Pagination buttons
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ElevatedButton(
+                        onPressed: page > 1
+                            ? () {
+                                setState(() => page--);
+                                _fetchAllStudents();
+                              }
+                            : null,
+                        child: Text('Prev Page'),
+                      ),
+                      Text('Page $page', style: TextStyle(fontSize: 12)),
+                      ElevatedButton(
+                        onPressed: students.length == limit
+                            ? () {
+                                setState(() => page++);
+                                _fetchAllStudents();
+                              }
+                            : null,
+                        child: Text('Next Page'),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                // Show student's grades
+                if (semesters.isNotEmpty) ...[
+                  DropdownButtonFormField<int>(
+                    value: selectedSemesterId,
+                    decoration: InputDecoration(
+                      labelText: 'Select Semester',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.calendar_month_rounded),
+                    ),
+                    items: semesters.map<DropdownMenuItem<int>>((sem) {
+                      return DropdownMenuItem<int>(
+                        value: sem['id'],
+                        child: Text(sem['label']),
+                      );
+                    }).toList(),
+                    onChanged: _onSemesterChanged,
+                  ),
+                  SizedBox(height: 12),
+                ],
+
+                if (subjects.isNotEmpty) ...[
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      child: DataTable(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
                           ],
                         ),
-                        onTap: () => _onStudentTap(s),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              // Pagination buttons
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    ElevatedButton(
-                      onPressed: page > 1
-                          ? () {
-                              setState(() => page--);
-                              _fetchAllStudents();
-                            }
-                          : null,
-                      child: Text('Prev Page'),
-                    ),
-                    Text('Page $page', style: TextStyle(fontSize: 12)),
-                    ElevatedButton(
-                      onPressed: students.length == limit
-                          ? () {
-                              setState(() => page++);
-                              _fetchAllStudents();
-                            }
-                          : null,
-                      child: Text('Next Page'),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              // Show student's grades
-              if (semesters.isNotEmpty) ...[
-                DropdownButtonFormField<int>(
-                  value: selectedSemesterId,
-                  decoration: InputDecoration(
-                    labelText: 'Select Semester',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.calendar_month_rounded),
-                  ),
-                  items: semesters.map<DropdownMenuItem<int>>((sem) {
-                    return DropdownMenuItem<int>(
-                      value: sem['id'],
-                      child: Text(sem['label']),
-                    );
-                  }).toList(),
-                  onChanged: _onSemesterChanged,
-                ),
-                SizedBox(height: 12),
-              ],
-
-              if (subjects.isNotEmpty) ...[
-                Expanded(
-                  child: Container(
-                    width: double.infinity,
-                    child: DataTable(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
+                        columns: const [
+                          DataColumn(label: Text('Subject Code')),
+                          DataColumn(label: Text('Student Grade')),
+                          DataColumn(label: Text('Actions')),
                         ],
-                      ),
-                      columns: const [
-                        DataColumn(label: Text('Subject Code')),
-                        DataColumn(label: Text('Student Grade')),
-                        DataColumn(label: Text('Actions')),
-                      ],
-                      rows: subjects.map<DataRow>((sub) {
-                        return DataRow(cells: [
-                          DataCell(Text(sub['subject_code'].toString())),
-                          DataCell(Text(sub['grade'].toString())),
-                          DataCell(
-                            IconButton(
-                              icon: Icon(Icons.edit, color: primaryColor),
-                              onPressed: () => _showEditGradeDialog(sub),
+                        rows: subjects.map<DataRow>((sub) {
+                          return DataRow(cells: [
+                            DataCell(Text(sub['subject_code'].toString())),
+                            DataCell(Text(sub['grade'].toString())),
+                            DataCell(
+                              IconButton(
+                                icon: Icon(Icons.edit, color: primaryColor),
+                                onPressed: () => _showEditGradeDialog(sub),
+                              ),
                             ),
-                          ),
-                        ]);
-                      }).toList(),
+                          ]);
+                        }).toList(),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ],
+            _buildBatchUpdateStatus(),
           ],
-          _buildBatchUpdateStatus(),
-        ],
+        ),
       ),
     );
   }
 
   @override
   void dispose() {
+    _clearCache();
     _studentIdController.dispose();
     _gradeController.dispose();
+    _emailController.dispose();
     super.dispose();
   }
 }

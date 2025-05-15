@@ -9,9 +9,18 @@ from utils.class_average_updater import update_class_average_for_subject_semeste
 from routes.students.at_risk import get_at_risk_students
 from routes.students.subjects import get_subjects
 from routes.sy_comprep import school_year_summary
-from cache_config import clear_all_caches
+from utils.email_sender import send_grade_notification
 
 modify_bp = Blueprint('modify', __name__)
+
+def clear_related_caches(student_id, semester_id, subject_code):
+    """Clear all existing caches"""
+    try:
+        # Clear all caches
+        cache.clear()
+        print("All caches cleared successfully")
+    except Exception as e:
+        print(f"Error clearing caches: {e}")
 
 @modify_bp.route('/debug/subjects', methods=['GET'])
 def debug_subjects():
@@ -49,6 +58,7 @@ def update_grade():
         subject_code = data['subject_code']
         semester_id = int(data['semester_id'])
         new_grade = int(float(data['new_grade']))
+        email = data.get('email', '')  # Get email if provided
 
         print(f"Processed values:")
         print(f"student_id: {student_id} (type: {type(student_id)})")
@@ -233,15 +243,24 @@ def update_grade():
         # Update class averages for the modified subject
         update_class_average_for_subject_semester(subject_code, semester_id)
 
-        # After updating grades, clear all caches
-        if not clear_all_caches():
-            print("Warning: Cache clearing may have failed")
-        
+        # Clear all related caches
+        clear_related_caches(student_id, semester_id, subject_code)
+
+        # After successful grade update, send email if provided
+        email_status = None
+        if email:
+            success, message = send_grade_notification(email, subject_code, new_grade)
+            email_status = {
+                "sent": success,
+                "message": message
+            }
+
         return jsonify({
             "message": "Grade updated successfully",
             "new_grade": new_grade,
             "weighted_average": weighted_avg,
-            "gpa": gpa
+            "gpa": gpa,
+            "email_status": email_status
         })
 
     except ValueError as ve:
@@ -269,7 +288,8 @@ def batch_update_grades():
                     'student_id': int(update['student_id']),
                     'subject_code': str(update['subject_code']),
                     'semester_id': int(update['semester_id']),
-                    'new_grade': int(float(update['new_grade']))
+                    'new_grade': int(float(update['new_grade'])),
+                    'email': update.get('email', '')  # Get email if provided
                 }
                 
                 if not (0 <= validated_update['new_grade'] <= 100):
@@ -311,12 +331,17 @@ def batch_update_grades():
                 # Create a new grades array with all updates
                 new_grades = grades_doc['Grades'].copy()
                 subject_updates = {}  # Track which subjects were updated
+                email_updates = {}  # Track email notifications
 
                 for update in updates:
                     try:
                         subject_index = grades_doc['SubjectCodes'].index(update['subject_code'])
                         new_grades[subject_index] = update['new_grade']
                         subject_updates[update['subject_code']] = update['new_grade']
+                        
+                        # Store email for notification
+                        if update.get('email'):
+                            email_updates[update['subject_code']] = update['email']
                     except ValueError:
                         errors.append({
                             "student_id": student_id,
@@ -387,12 +412,23 @@ def batch_update_grades():
                     for subject_code in subject_updates:
                         update_class_average_for_subject_semester(subject_code, semester_id)
 
+                    # Send email notifications
+                    email_statuses = {}
+                    for subject_code, email in email_updates.items():
+                        if email:
+                            success, message = send_grade_notification(email, subject_code, subject_updates[subject_code])
+                            email_statuses[subject_code] = {
+                                "sent": success,
+                                "message": message
+                            }
+
                     results.append({
                         "student_id": student_id,
                         "semester_id": semester_id,
                         "updated_subjects": list(subject_updates.keys()),
                         "weighted_average": weighted_avg,
-                        "gpa": gpa
+                        "gpa": gpa,
+                        "email_statuses": email_statuses
                     })
 
             except Exception as e:
@@ -403,8 +439,11 @@ def batch_update_grades():
                 })
 
         # Clear all caches after batch update
-        if not clear_all_caches():
-            print("Warning: Cache clearing may have failed")
+        try:
+            cache.clear()
+            print("All caches cleared successfully")
+        except Exception as e:
+            print(f"Error clearing caches: {e}")
 
         return jsonify({
             "message": "Batch update completed",

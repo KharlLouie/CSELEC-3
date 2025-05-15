@@ -8,7 +8,7 @@ class SubjectAnalyticsPage extends StatefulWidget {
   _SubjectAnalyticsPageState createState() => _SubjectAnalyticsPageState();
 }
 
-class _SubjectAnalyticsPageState extends State<SubjectAnalyticsPage> {
+class _SubjectAnalyticsPageState extends State<SubjectAnalyticsPage> with AutomaticKeepAliveClientMixin {
   List<dynamic> semesters = [];
   List<dynamic> subjects = [];
   int? selectedSemesterId;
@@ -18,9 +18,33 @@ class _SubjectAnalyticsPageState extends State<SubjectAnalyticsPage> {
   final ScrollController _scrollController = ScrollController();
 
   @override
+  bool get wantKeepAlive => false;
+
+  @override
   void initState() {
     super.initState();
     fetchAnalyticsData(page: currentPage);
+  }
+
+  @override
+  void dispose() {
+    // Clear cache when leaving the page
+    _clearCache();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _clearCache() async {
+    try {
+      final uri = Uri.http(apiBaseUrl, '/subjects/analytics');
+      await http.post(
+        uri,
+        headers: {'Cache-Control': 'no-cache'},
+        body: json.encode({'timestamp': DateTime.now().millisecondsSinceEpoch.toString()}),
+      );
+    } catch (e) {
+      print('Error clearing cache: $e');
+    }
   }
 
   Future<void> fetchAnalyticsData({int page = 1}) async {
@@ -67,12 +91,6 @@ class _SubjectAnalyticsPageState extends State<SubjectAnalyticsPage> {
       subjects.clear();
     });
     fetchAnalyticsData(page: 1);
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   @override

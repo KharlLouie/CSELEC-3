@@ -9,106 +9,98 @@ class StudentPerformancePage extends StatefulWidget {
 }
 
 class _StudentPerformancePageState extends State<StudentPerformancePage> {
-  // "All"‑view data
-  List<dynamic> students = [];
-  int limit = 10, page = 1;
+  // Data storage
+  List<Map<String, dynamic>> students = [];
+  List<Map<String, dynamic>> semesters = [
+    {'id': 1, 'label': '2020 - FirstSem'},
+    {'id': 2, 'label': '2020 - SecondSem'},
+    {'id': 3, 'label': '2020 - Summer'},
+    {'id': 4, 'label': '2021 - FirstSem'},
+    {'id': 5, 'label': '2021 - SecondSem'},
+    {'id': 6, 'label': '2021 - Summer'},
+    {'id': 7, 'label': '2022 - FirstSem'},
+    {'id': 8, 'label': '2022 - SecondSem'},
+    {'id': 9, 'label': '2022 - Summer'},
+    {'id': 10, 'label': '2023 - FirstSem'},
+    {'id': 11, 'label': '2023 - SecondSem'},
+    {'id': 12, 'label': '2023 - Summer'},
+    {'id': 13, 'label': '2024 - FirstSem'},
+    {'id': 14, 'label': '2024 - SecondSem'},
+    {'id': 15, 'label': '2024 - Summer'},
+  ];
+  List<Map<String, dynamic>> subjects = [];
 
-  // Single‑student performance data
-  List<dynamic> semesters = [];
-  List<dynamic> subjects = [];
-
+  // State variables
   int? selectedSemesterId;
   int? studentId;
-
   bool isLoading = false;
-  bool hasError = false;
+  String? errorMessage;
 
   final TextEditingController _studentIdController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _fetchAllOrOne();
+    fetchAllStudents();
   }
 
-  Future<void> _fetchAllOrOne() async {
+  Future<void> fetchAllStudents() async {
     setState(() {
       isLoading = true;
-      hasError = false;
+      errorMessage = null;
     });
 
     try {
-      final bool allView = (studentId == null);
-      final path = allView
-          ? '/students/performance/all'
-          : '/students/performance/$studentId';
+      final response = await http.get(
+        Uri.http(apiBaseUrl, '/students/performance/all'),
+      );
 
-      // Build query params
-      final Map<String, String> query = {};
-      if (allView) {
-        query['page'] = page.toString();
-        query['limit'] = limit.toString();
-      } else if (selectedSemesterId != null) {
-        query['semester_id'] = selectedSemesterId.toString();
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          students = List<Map<String, dynamic>>.from(data['students']);
+          isLoading = false;
+        });
+      } else {
+        throw Exception('Failed to load students');
       }
-
-      final uri = Uri.http(apiBaseUrl, path, query.isNotEmpty ? query : null);
-      print('Fetching from: $uri'); // Debug log
-      final resp = await http.get(uri);
-      print('Response status: ${resp.statusCode}'); // Debug log
-      print('Response body: ${resp.body}'); // Debug log
-
-      if (resp.statusCode != 200) {
-        throw Exception('HTTP ${resp.statusCode}');
-      }
-      final data = json.decode(resp.body);
-
-      setState(() {
-        if (allView) {
-          students = data['students'] as List<dynamic>;
-          limit = data['limit'] ?? limit;
-          page = data['page'] ?? page;
-          semesters = [];
-          subjects = [];
-        } else {
-          // Handle individual student view
-          // Fetch all available semesters
-          if (semesters.isEmpty) {
-            semesters = [
-              {'id': 1, 'label': '2020 - FirstSem'},
-              {'id': 2, 'label': '2020 - SecondSem'},
-              {'id': 3, 'label': '2020 - Summer'},
-              {'id': 4, 'label': '2021 - FirstSem'},
-              {'id': 5, 'label': '2021 - SecondSem'},
-              {'id': 6, 'label': '2021 - Summer'},
-              {'id': 7, 'label': '2022 - FirstSem'},
-              {'id': 8, 'label': '2022 - SecondSem'},
-              {'id': 9, 'label': '2022 - Summer'},
-              {'id': 10, 'label': '2023 - FirstSem'},
-              {'id': 11, 'label': '2023 - SecondSem'},
-              {'id': 12, 'label': '2023 - Summer'},
-              {'id': 13, 'label': '2024 - FirstSem'},
-              {'id': 14, 'label': '2024 - SecondSem'},
-              {'id': 15, 'label': '2024 - Summer'},
-            ];
-            // Set the current semester as selected
-            selectedSemesterId = data['semester_id'] as int;
-          }
-          
-          // Set the subjects directly from the response
-          subjects = data['subjects'] as List<dynamic>;
-          
-          // Clear the students list since we're in individual view
-          students = [];
-        }
-      });
     } catch (e) {
-      print('Error fetching: $e');
       setState(() {
-        hasError = true;
+        errorMessage = 'Failed to load students: $e';
+        isLoading = false;
       });
-    } finally {
+    }
+  }
+
+  Future<void> fetchStudentSubjects() async {
+    if (studentId == null) return;
+
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final queryParams = selectedSemesterId != null 
+          ? {'semester_id': selectedSemesterId.toString()}
+          : null;
+
+      final response = await http.get(
+        Uri.http(apiBaseUrl, '/students/performance/$studentId', queryParams),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          subjects = List<Map<String, dynamic>>.from(data['subjects']);
+          isLoading = false;
+        });
+      } else {
+        throw Exception('Failed to load subjects');
+      }
+    } catch (e) {
       setState(() {
+        errorMessage = 'Failed to load subjects: $e';
         isLoading = false;
       });
     }
@@ -118,42 +110,35 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
     final txt = _studentIdController.text.trim();
     setState(() {
       studentId = txt.isEmpty ? null : int.tryParse(txt);
-      selectedSemesterId = null;
-      students = [];
-      semesters = [];
+      selectedSemesterId = txt.isEmpty ? null : 1;
       subjects = [];
-      page = 1; // reset to first page on new fetch
     });
-    _fetchAllOrOne();
+    
+    if (studentId == null) {
+      fetchAllStudents();
+    } else {
+      fetchStudentSubjects();
+    }
   }
 
   void _onSemesterChanged(int? semId) {
     setState(() {
       selectedSemesterId = semId;
-      subjects = [];
     });
-    _fetchAllOrOne();
+    fetchStudentSubjects();
   }
 
-  void _onStudentTap(dynamic student) {
+  void _onStudentTap(Map<String, dynamic> student) {
     final id = student['student_id'] as int?;
     if (id != null) {
       _studentIdController.text = id.toString();
       setState(() {
         studentId = id;
-        selectedSemesterId = null;
-        students = [];
-        semesters = [];
+        selectedSemesterId = 1;
         subjects = [];
       });
-      _fetchAllOrOne();
+      fetchStudentSubjects();
     }
-  }
-
-  @override
-  void dispose() {
-    _studentIdController.dispose();
-    super.dispose();
   }
 
   @override
@@ -182,11 +167,11 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
 
             if (isLoading) ...[
               Center(child: CircularProgressIndicator()),
-            ] else if (hasError) ...[
-              Center(child: Text('Failed to load data.')), 
+            ] else if (errorMessage != null) ...[
+              Center(child: Text(errorMessage!, style: TextStyle(color: Colors.red))),
             ] else ...[
               // "All" view
-              if (studentId == null && students.isNotEmpty) ...[
+              if (studentId == null) ...[
                 Expanded(
                   child: ListView.builder(
                     itemCount: students.length,
@@ -209,56 +194,27 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
                     },
                   ),
                 ),
-                // Pagination buttons
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      ElevatedButton(
-                        onPressed: page > 1
-                            ? () {
-                                setState(() => page--);
-                                _fetchAllOrOne();
-                              }
-                            : null,
-                        child: Text('Prev Page'),
-                      ),
-                      Text('Page $page', style: TextStyle(fontSize: 12)),
-                      ElevatedButton(
-                        onPressed: students.length == limit
-                            ? () {
-                                setState(() => page++);
-                                _fetchAllOrOne();
-                              }
-                            : null,
-                        child: Text('Next Page'),
-                      ),
-                    ],
-                  ),
-                ),
               ],
 
               // Single‑student view
               if (studentId != null) ...[
-                if (semesters.isNotEmpty) ...[
-                  DropdownButtonFormField<int>(
-                    value: selectedSemesterId,
-                    decoration: InputDecoration(
-                      labelText: 'Select Semester',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.calendar_month_rounded),
-                    ),
-                    items: semesters.map<DropdownMenuItem<int>>((sem) {
-                      return DropdownMenuItem<int>(
-                        value: sem['id'],
-                        child: Text(sem['label']),
-                      );
-                    }).toList(),
-                    onChanged: _onSemesterChanged,
+                DropdownButtonFormField<int>(
+                  value: selectedSemesterId,
+                  decoration: InputDecoration(
+                    labelText: 'Select Semester',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.calendar_month_rounded),
                   ),
-                  SizedBox(height: 12),
-                ],
+                  menuMaxHeight: 100,
+                  items: semesters.map<DropdownMenuItem<int>>((sem) {
+                    return DropdownMenuItem<int>(
+                      value: sem['id'],
+                      child: Text(sem['label']),
+                    );
+                  }).toList(),
+                  onChanged: _onSemesterChanged,
+                ),
+                SizedBox(height: 12),
 
                 if (subjects.isNotEmpty) ...[
                   Expanded(
@@ -289,9 +245,11 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
                       ),
                     ),
                   ),
-                ] else if (!isLoading && !hasError) ...[
-                  Center(
-                    child: Text('No subject data available for this semester'),
+                ] else ...[
+                  Expanded(
+                    child: Center(
+                      child: Text('No subjects available for this semester'),
+                    ),
                   ),
                 ],
               ],
@@ -300,5 +258,11 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _studentIdController.dispose();
+    super.dispose();
   }
 }

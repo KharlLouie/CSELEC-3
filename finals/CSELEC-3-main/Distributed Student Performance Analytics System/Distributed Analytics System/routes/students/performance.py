@@ -18,13 +18,6 @@ def init_worker():
     global app
     app = create_app()
     app.app_context().push()
-    
-    # Ensure cache is properly initialized in worker
-    cache.init_app(app)
-    
-    # Clear any stale cache in worker
-    from cache_config import clear_all_caches
-    clear_all_caches()
 
 def process_subject_data(subject, class_averages, semester_id):
     """Process individual subject data in parallel"""

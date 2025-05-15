@@ -70,26 +70,21 @@ def create_app():
     from cache_config import cache
     cache.init_app(app)
 
-    # Register database teardown
-    from db.mongodb import MongoDB
-    app.teardown_appcontext(MongoDB.close_db)
-
-    # Initialize MongoDB within app context
-    with app.app_context():
-        try:
-            db = MongoDB.get_db()
-            if 'request_logs' not in db.list_collection_names():
-                db.create_collection('request_logs')
-                db.request_logs.create_index([('timestamp', -1)])
-                db.request_logs.create_index([('path', 1)])
-                db.request_logs.create_index([('status_code', 1)])
-                # Add compound index for request deduplication
-                db.request_logs.create_index([
-                    ('request_hash', 1),
-                    ('timestamp', -1)
-                ])
-        except Exception as e:
-            print(f"MongoDB Connection Failed: {e}")
+    # Initialize MongoDB
+    try:
+        db = get_db()
+        if 'request_logs' not in db.list_collection_names():
+            db.create_collection('request_logs')
+            db.request_logs.create_index([('timestamp', -1)])
+            db.request_logs.create_index([('path', 1)])
+            db.request_logs.create_index([('status_code', 1)])
+            # Add compound index for request deduplication
+            db.request_logs.create_index([
+                ('request_hash', 1),
+                ('timestamp', -1)
+            ])
+    except Exception as e:
+        print(f"MongoDB Connection Failed: {e}")
 
     # Request logging middleware
     @app.before_request
