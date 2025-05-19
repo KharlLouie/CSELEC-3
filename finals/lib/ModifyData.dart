@@ -376,6 +376,60 @@ class _ModifyDataPageState extends State<ModifyDataPage> with AutomaticKeepAlive
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
+                onSubmitted: (_) async {
+                try {
+                  final newGrade = double.tryParse(_gradeController.text);
+                  if (newGrade == null || newGrade < 0 || newGrade > 100) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Please enter a valid grade between 0 and 100')),
+                    );
+                    return;
+                  }
+
+                  final email = _emailController.text.trim();
+                  if (email.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Email address is required')),
+                    );
+                    return;
+                  }
+                  
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Please enter a valid email address')),
+                    );
+                    return;
+                  }
+
+                  Navigator.of(context).pop();
+
+                  // Apply optimistic update
+                  _optimisticallyUpdateGrade(subject, newGrade);
+
+                  // Add to batch updates
+                  _batchUpdates.add({
+                    'student_id': studentId,
+                    'subject_code': subject['subject_code'],
+                    'semester_id': selectedSemesterId,
+                    'new_grade': newGrade,
+                    'email': email,
+                  });
+
+                  // Process batch updates if not already updating
+                  if (!_isUpdating) {
+                    await _processBatchUpdates();
+                  }
+
+                } catch (e) {
+                  print('Error in grade update: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to update grade: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
               ),
               SizedBox(height: 16),
               TextField(
@@ -386,6 +440,60 @@ class _ModifyDataPageState extends State<ModifyDataPage> with AutomaticKeepAlive
                   prefixIcon: Icon(Icons.email),
                 ),
                 keyboardType: TextInputType.emailAddress,
+                onSubmitted: (_) async {
+                try {
+                  final newGrade = double.tryParse(_gradeController.text);
+                  if (newGrade == null || newGrade < 0 || newGrade > 100) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Please enter a valid grade between 0 and 100')),
+                    );
+                    return;
+                  }
+
+                  final email = _emailController.text.trim();
+                  if (email.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Email address is required')),
+                    );
+                    return;
+                  }
+                  
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Please enter a valid email address')),
+                    );
+                    return;
+                  }
+
+                  Navigator.of(context).pop();
+
+                  // Apply optimistic update
+                  _optimisticallyUpdateGrade(subject, newGrade);
+
+                  // Add to batch updates
+                  _batchUpdates.add({
+                    'student_id': studentId,
+                    'subject_code': subject['subject_code'],
+                    'semester_id': selectedSemesterId,
+                    'new_grade': newGrade,
+                    'email': email,
+                  });
+
+                  // Process batch updates if not already updating
+                  if (!_isUpdating) {
+                    await _processBatchUpdates();
+                  }
+
+                } catch (e) {
+                  print('Error in grade update: $e');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to update grade: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
               ),
             ],
           ),
@@ -395,6 +503,7 @@ class _ModifyDataPageState extends State<ModifyDataPage> with AutomaticKeepAlive
               child: Text('Cancel'),
             ),
             ElevatedButton(
+              
               onPressed: () async {
                 try {
                   final newGrade = double.tryParse(_gradeController.text);
@@ -495,6 +604,7 @@ class _ModifyDataPageState extends State<ModifyDataPage> with AutomaticKeepAlive
                 prefixIcon: Icon(Icons.person),
               ),
               keyboardType: TextInputType.number,
+              onSubmitted: (_) => _onFetchPressed(),
             ),
             SizedBox(height: 8),
             ElevatedButton(
@@ -564,6 +674,7 @@ class _ModifyDataPageState extends State<ModifyDataPage> with AutomaticKeepAlive
                 // Show student's grades
                 if (semesters.isNotEmpty) ...[
                   DropdownButtonFormField<int>(
+                    menuMaxHeight: 160,
                     value: selectedSemesterId,
                     decoration: InputDecoration(
                       labelText: 'Select Semester',
@@ -632,3 +743,5 @@ class _ModifyDataPageState extends State<ModifyDataPage> with AutomaticKeepAlive
     super.dispose();
   }
 }
+
+

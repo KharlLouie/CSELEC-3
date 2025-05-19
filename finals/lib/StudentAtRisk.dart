@@ -70,6 +70,12 @@ class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> wit
           semesters = data['semesters'];
           students = data['data'];
           hasMoreData = data['data'].isNotEmpty;
+
+            // Set default semester to the first one if not yet selected
+            if (selectedSemesterId == null && semesters.isNotEmpty) {
+            selectedSemesterId = semesters[0]['semester_id'];
+            }
+
         });
       } else {
         throw Exception('Failed to load analytics');
@@ -233,6 +239,7 @@ class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> wit
                           Expanded(
                             child: DropdownButtonFormField<int>(
                               value: selectedSemesterId,
+                              menuMaxHeight: 160,
                               decoration: InputDecoration(
                                 labelText: 'Select Semester',
                                 border: OutlineInputBorder(),
@@ -250,13 +257,23 @@ class _StudentRiskAnalyticsPageState extends State<StudentRiskAnalyticsPage> wit
                           SizedBox(width: 16),
                           Expanded(
                             child: TextField(
-                              controller: studentIdController,
-                              decoration: InputDecoration(
-                                labelText: 'Enter Student ID',
-                                border: OutlineInputBorder(),
-                                prefixIcon: Icon(Icons.person),
-                              ),
-                            ),
+  controller: studentIdController,
+  decoration: InputDecoration(
+    labelText: 'Enter Student ID',
+    border: OutlineInputBorder(),
+    prefixIcon: Icon(Icons.person),
+  ),
+  onSubmitted: (value) {
+    if (value.isNotEmpty) {
+      fetchStudentRiskFactors(value);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter a student ID')),
+      );
+    }
+  },
+),
+
                           ),
                           SizedBox(width: 16),
                           ElevatedButton(

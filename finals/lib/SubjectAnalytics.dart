@@ -106,6 +106,7 @@ class _SubjectAnalyticsPageState extends State<SubjectAnalyticsPage> with Automa
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: DropdownButtonFormField<int>(
+                    menuMaxHeight: 160,
                     value: selectedSemesterId,
                     decoration: InputDecoration(
                       labelText: 'Select Semester',

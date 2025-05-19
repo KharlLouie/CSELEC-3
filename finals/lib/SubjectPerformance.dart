@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'host_info.dart';
 
 class StudentPerformancePage extends StatefulWidget {
@@ -9,7 +10,6 @@ class StudentPerformancePage extends StatefulWidget {
 }
 
 class _StudentPerformancePageState extends State<StudentPerformancePage> {
-  // Data storage
   List<Map<String, dynamic>> students = [];
   List<Map<String, dynamic>> semesters = [
     {'id': 1, 'label': '2020 - FirstSem'},
@@ -30,21 +30,34 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
   ];
   List<Map<String, dynamic>> subjects = [];
 
-  // State variables
   int? selectedSemesterId;
   int? studentId;
   bool isLoading = false;
   String? errorMessage;
 
+  int currentPage = 1;
+  bool hasNextPage = true;
+
   final TextEditingController _studentIdController = TextEditingController();
+
+  int highlightedIndex = 0;
+  late ScrollController _semesterScrollController;
 
   @override
   void initState() {
     super.initState();
-    fetchAllStudents();
+    fetchAllStudents(page: 1);
+    _semesterScrollController = ScrollController();
   }
 
-  Future<void> fetchAllStudents() async {
+  @override
+  void dispose() {
+    _semesterScrollController.dispose();
+    _studentIdController.dispose();
+    super.dispose();
+  }
+
+  Future<void> fetchAllStudents({int page = 1}) async {
     setState(() {
       isLoading = true;
       errorMessage = null;
@@ -52,13 +65,15 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
 
     try {
       final response = await http.get(
-        Uri.http(apiBaseUrl, '/students/performance/all'),
+        Uri.parse('http://$apiBaseUrl/students/performance/all?page=$page'),
       );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
           students = List<Map<String, dynamic>>.from(data['students']);
+          currentPage = page;
+          hasNextPage = data['has_next'] ?? students.length == 10;
           isLoading = false;
         });
       } else {
@@ -73,7 +88,7 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
   }
 
   Future<void> fetchStudentSubjects() async {
-    if (studentId == null) return;
+    if (studentId == null || selectedSemesterId == null) return;
 
     setState(() {
       isLoading = true;
@@ -81,12 +96,10 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
     });
 
     try {
-      final queryParams = selectedSemesterId != null 
-          ? {'semester_id': selectedSemesterId.toString()}
-          : null;
+      final queryParams = {'semester_id': selectedSemesterId.toString()};
 
       final response = await http.get(
-        Uri.http(apiBaseUrl, '/students/performance/$studentId', queryParams),
+        Uri.http(apiBaseUrl,'/students/performance/$studentId', queryParams),
       );
 
       if (response.statusCode == 200) {
@@ -110,22 +123,20 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
     final txt = _studentIdController.text.trim();
     setState(() {
       studentId = txt.isEmpty ? null : int.tryParse(txt);
-      selectedSemesterId = txt.isEmpty ? null : 1;
+      if (studentId != null) {
+        selectedSemesterId = semesters[0]['id'] as int?;
+        highlightedIndex = 0;
+      } else {
+        selectedSemesterId = null;
+      }
       subjects = [];
     });
-    
+
     if (studentId == null) {
-      fetchAllStudents();
+      fetchAllStudents(page: 1);
     } else {
       fetchStudentSubjects();
     }
-  }
-
-  void _onSemesterChanged(int? semId) {
-    setState(() {
-      selectedSemesterId = semId;
-    });
-    fetchStudentSubjects();
   }
 
   void _onStudentTap(Map<String, dynamic> student) {
@@ -134,7 +145,8 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
       _studentIdController.text = id.toString();
       setState(() {
         studentId = id;
-        selectedSemesterId = 1;
+        selectedSemesterId = semesters[0]['id'] as int?;
+        highlightedIndex = 0;
         subjects = [];
       });
       fetchStudentSubjects();
@@ -143,6 +155,8 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
 
   @override
   Widget build(BuildContext context) {
+    final primaryColor = Theme.of(context).primaryColor;
+
     return Scaffold(
       appBar: AppBar(title: Text('Student Performance')),
       body: Padding(
@@ -152,11 +166,13 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
             TextField(
               controller: _studentIdController,
               decoration: InputDecoration(
-                labelText: 'Enter Student ID (Leave blank and Fetch to reveal all student list)',
+                labelText:
+                    'Enter Student ID (Leave blank and Fetch to reveal all student list)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.person),
               ),
               keyboardType: TextInputType.number,
+              onSubmitted: (_) => _onFetchPressed(),
             ),
             SizedBox(height: 8),
             ElevatedButton(
@@ -164,105 +180,146 @@ class _StudentPerformancePageState extends State<StudentPerformancePage> {
               child: Text('Fetch Data'),
             ),
             SizedBox(height: 16),
-
-            if (isLoading) ...[
-              Center(child: CircularProgressIndicator()),
-            ] else if (errorMessage != null) ...[
-              Center(child: Text(errorMessage!, style: TextStyle(color: Colors.red))),
-            ] else ...[
-              // "All" view
-              if (studentId == null) ...[
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: students.length,
-                    itemBuilder: (_, i) {
-                      final s = students[i];
-                      return Card(
-                        margin: EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          title: Text(s['name']),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+            if (studentId == null)
+              Expanded(
+                child: isLoading
+                    ? Center(child: CircularProgressIndicator())
+                    : errorMessage != null
+                        ? Center(
+                            child: Text(
+                              errorMessage!,
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          )
+                        : Column(
                             children: [
-                              Text('GPA: ${s['overall_gpa']}'),
-                              Text('Weighted Avg: ${s['weighted_average']}'),
+                              Expanded(
+                                child: ListView.builder(
+                                  itemCount: students.length,
+                                  itemBuilder: (_, i) {
+                                    final s = students[i];
+                                    return Card(
+                                      margin: EdgeInsets.symmetric(vertical: 6),
+                                      child: ListTile(
+                                        title: Text(s['name']),
+                                        subtitle: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('GPA: ${s['overall_gpa']}'),
+                                            Text('Weighted Avg: ${s['weighted_average']}'),
+                                          ],
+                                        ),
+                                        onTap: () => _onStudentTap(s),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  ElevatedButton(
+                                    onPressed: currentPage > 1
+                                        ? () => fetchAllStudents(page: currentPage - 1)
+                                        : null,
+                                    child: Text('Previous'),
+                                  ),
+                                  Padding(
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 14),
+                                    child: Text('Page $currentPage'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: hasNextPage
+                                        ? () => fetchAllStudents(page: currentPage + 1)
+                                        : null,
+                                    child: Text('Next'),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
-                          onTap: () => _onStudentTap(s),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-
-              // Single‑student view
-              if (studentId != null) ...[
-                DropdownButtonFormField<int>(
-                  value: selectedSemesterId,
-                  decoration: InputDecoration(
-                    labelText: 'Select Semester',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.calendar_month_rounded),
-                  ),
-                  menuMaxHeight: 100,
-                  items: semesters.map<DropdownMenuItem<int>>((sem) {
-                    return DropdownMenuItem<int>(
-                      value: sem['id'],
-                      child: Text(sem['label']),
-                    );
-                  }).toList(),
-                  onChanged: _onSemesterChanged,
-                ),
-                SizedBox(height: 12),
-
-                if (subjects.isNotEmpty) ...[
-                  Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      child: DataTable(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))
-                          ],
-                        ),
-                        columns: const [
-                          DataColumn(label: Text('Subject Code')),
-                          DataColumn(label: Text('Student Grade')),
-                          DataColumn(label: Text('Units')),
-                          DataColumn(label: Text('Class Average')),
-                        ],
-                        rows: subjects.map<DataRow>((sub) {
-                          return DataRow(cells: [
-                            DataCell(Text(sub['subject_code'].toString())),
-                            DataCell(Text(sub['grade'].toString())),
-                            DataCell(Text(sub['Units'].toString())),
-                            DataCell(Text(sub['class_average'].toString())),
-                          ]);
-                        }).toList(),
+              )
+            else
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<int>(
+                      value: selectedSemesterId,
+                      decoration: InputDecoration(
+                        labelText: 'Select School Year and Semester',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12),
                       ),
+                      isExpanded: true,
+                      menuMaxHeight: 160,
+                      items: semesters.map((sem) {
+                        return DropdownMenuItem<int>(
+                          value: sem['id'] as int,
+                          child: Text(sem['label']),
+                        );
+                      }).toList(),
+                      onChanged: (int? value) {
+                        setState(() {
+                          selectedSemesterId = value;
+                        });
+                        fetchStudentSubjects();
+                      },
                     ),
-                  ),
-                ] else ...[
-                  Expanded(
-                    child: Center(
-                      child: Text('No subjects available for this semester'),
+                    SizedBox(height: 12),
+                    Expanded(
+                      child: isLoading
+                          ? Center(child: CircularProgressIndicator())
+                          : errorMessage != null
+                              ? Center(
+                                  child: Text(
+                                    errorMessage!,
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                )
+                              : subjects.isNotEmpty
+                                  ? Container(
+                                      width: double.infinity,
+                                      child: DataTable(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(12),
+                                          boxShadow: [
+                                            BoxShadow(
+                                                color: Colors.black12,
+                                                blurRadius: 6,
+                                                offset: Offset(0, 2)),
+                                          ],
+                                        ),
+                                        columns: const [
+                                          DataColumn(label: Text('Subject Code')),
+                                          DataColumn(label: Text('Student Grade')),
+                                          DataColumn(label: Text('Units')),
+                                          DataColumn(label: Text('Class Average')),
+                                        ],
+                                        rows: subjects.map<DataRow>((sub) {
+                                          return DataRow(cells: [
+                                            DataCell(Text(sub['subject_code'].toString())),
+                                            DataCell(Text(sub['grade'].toString())),
+                                            DataCell(Text(sub['Units'].toString())),
+                                            DataCell(
+                                                Text(sub['class_average'].toString())),
+                                          ]);
+                                        }).toList(),
+                                      ),
+                                    )
+                                  : Center(
+                                      child: Text(
+                                          'No subjects available for this semester'),
+                                    ),
                     ),
-                  ),
-                ],
-              ],
-            ],
+                  ],
+                ),
+              ),
           ],
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _studentIdController.dispose();
-    super.dispose();
   }
 }
